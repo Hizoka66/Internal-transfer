@@ -10,8 +10,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
+    <!-- 💡 เชื่อมต่อ PWA ไฟล์ -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/709/709790.png">
+    
     <script>
         window.addEventListener('error', function(e) { console.error("Global Error:", e.message); });
+        // 💡 ลงทะเบียน Service Worker สำหรับ PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(console.error);
+        }
     </script>
 
     <!-- Import Libraries -->
@@ -25,9 +33,17 @@
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
         
-        /* ซ่อนข้อความของตัวสแกนกล้องให้ดูสะอาดขึ้น */
+        /* ซ่อนข้อความรบกวนในตัวสแกนกล้อง */
         #qr-reader__dashboard_section_csr span { display: none !important; }
         #qr-reader { border: none !important; }
+        
+        /* Animation สำหรับหน้า Install */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -35,14 +51,13 @@
         <div style="padding: 20px; color: #666; text-align: center; font-family: sans-serif; margin-top: 20vh;">
             <div style="width: 40px; height: 40px; border: 4px solid #bfdbfe; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px auto;"></div>
             <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            กำลังเชื่อมต่อกับระบบหลังบ้าน...
+            กำลังเริ่มต้นระบบ...
         </div>
     </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, Component } = React;
 
-        // 💡 API URL ของคุณ 
         const API_URL = "https://script.google.com/macros/s/AKfycbxBp4lTwyZ21SOGZ2afHqM20apwhr8dyXW2N2RYP9BQxdZLO4vidHExR55cAJBqxpwgpA/exec"; 
 
         const callAPI = async (action, payload = {}) => {
@@ -113,6 +128,15 @@
         const PieChart = (p) => <SvgIcon {...p}><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></SvgIcon>;
         const Download = (p) => <SvgIcon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></SvgIcon>;
         const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
+        const Share = (p) => <SvgIcon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></SvgIcon>;
+
+        const formatTimeHelper = (isoString) => {
+            if (!isoString) return '';
+            try {
+                const d = new Date(isoString);
+                return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return ''; }
+        };
 
         const Card = ({ children, className = '' }) => (<div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-6 ${className}`}>{children}</div>);
         const StatusBadge = ({ status }) => {
@@ -121,9 +145,85 @@
             return (<span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || 'bg-gray-100'}`}>{labels[status] || status}</span>);
         };
 
+        // ==========================================
+        // 🚀 หน้าต่าง Install App (PWA)
+        // ==========================================
+        const InstallScreen = ({ onSkip }) => {
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+            const [showIosInstruction, setShowIosInstruction] = useState(false);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+            useEffect(() => {
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    setDeferredPrompt(e);
+                });
+            }, []);
+
+            const handleInstallClick = async () => {
+                if (isIOS) {
+                    setShowIosInstruction(true);
+                } else if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        onSkip();
+                    }
+                    setDeferredPrompt(null);
+                } else {
+                    onSkip();
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
+                    <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-500 relative">
+                        
+                        {/* ไอคอนด้านบน */}
+                        <div className="pt-10 pb-6 flex flex-col items-center bg-gradient-to-b from-blue-50 to-white relative">
+                            <button onClick={onSkip} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-medium text-sm">ข้าม</button>
+                            <img 
+                                src="https://cdn-icons-png.flaticon.com/512/709/709790.png" 
+                                alt="App Mascot" 
+                                className="w-40 h-40 object-contain drop-shadow-lg animate-float"
+                            />
+                        </div>
+
+                        {/* ข้อความและปุ่ม */}
+                        <div className="px-6 pb-10 text-center">
+                            <h1 className="text-2xl font-bold text-slate-800 mb-2 leading-tight">Transport<br/>Management App</h1>
+                            <button 
+                                onClick={handleInstallClick}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] transition-all active:scale-95 mt-6 mb-4"
+                            >
+                                Install
+                            </button>
+                            <p className="text-slate-500 text-sm">We'll also create a shortcut</p>
+                        </div>
+                        
+                        {/* คำแนะนำสำหรับ iOS */}
+                        {showIosInstruction && (
+                            <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-50 animate-in fade-in">
+                                <div className="bg-white p-6 rounded-2xl text-center w-full relative">
+                                    <button onClick={() => setShowIosInstruction(false)} className="absolute top-3 right-3 text-slate-400"><X size={20}/></button>
+                                    <h3 className="font-bold text-lg mb-4 text-slate-800">วิธีการติดตั้งบน iPhone</h3>
+                                    <div className="text-left text-slate-600 space-y-4 text-sm">
+                                        <p className="flex items-center gap-3"><span className="bg-blue-100 text-blue-600 p-2 rounded-lg"><Share size={18}/></span> <b>1.</b> แตะไอคอนแชร์ที่เมนูด้านล่าง</p>
+                                        <p className="flex items-center gap-3"><span className="bg-blue-100 text-blue-600 p-2 rounded-lg"><PlusCircle size={18}/></span> <b>2.</b> เลือก "เพิ่มไปยังหน้าจอโฮม"</p>
+                                        <p className="flex items-center gap-3"><span className="bg-blue-100 text-blue-600 p-2 rounded-lg"><CheckCircle size={18}/></span> <b>3.</b> แตะ "เพิ่ม" ที่มุมขวาบน</p>
+                                    </div>
+                                    <button onClick={onSkip} className="mt-6 w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200">เข้าใช้งานผ่านเว็บแทน</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         // --- COMPONENTS ---
 
-        // 💡 ระบบกล้อง Live Scanner (แก้บั๊ก removeChild Error)
+        // ระบบกล้อง Live Scanner (แก้บั๊ก removeChild Error)
         const QRScannerModal = ({ isOpen, onClose, onScanSuccess, expectedLocation }) => {
             const [error, setError] = useState('');
             const [step, setStep] = useState('scan'); 
@@ -140,7 +240,6 @@
 
             useEffect(() => {
                 if (isOpen && step === 'scan') {
-                    // หน่วงเวลาเล็กน้อยเพื่อให้ DOM เตรียมความพร้อม ป้องกันการ Error
                     setTimeout(() => {
                         const html5QrCode = new window.Html5Qrcode("qr-reader");
                         scannerRef.current = html5QrCode;
@@ -160,9 +259,7 @@
                                     setError(`❌ สแกนผิดจุด!\nระบบต้องการป้าย: "${expectedLocation}"`);
                                 }
                             },
-                            (errorMessage) => {
-                                // ปล่อยให้มันเงียบๆ เวลากำลังสแกนหา
-                            }
+                            (errorMessage) => { }
                         ).catch((err) => {
                             setError("❌ ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบสิทธิ์กล้อง (Camera Permission)");
                         });
@@ -211,11 +308,8 @@
 
                         <div className="relative flex flex-col items-center justify-center pt-8 pb-8 px-6 flex-1 min-h-[350px]">
                             
-                            {/* 💡 ซ่อนด้วย className แบบ hidden แทนการลบทิ้ง เพื่อแก้บั๊ก NotFoundError */}
                             <div className={`w-full flex-col items-center ${step === 'scan' ? 'flex' : 'hidden'}`}>
-                                {/* 💡 ต้องปล่อยกล่องด้านล่างนี้ให้ "ว่างเปล่า" ห้ามมีข้อความใดๆ เพื่อไม่ให้ React สับสนกับไลบรารีกล้อง */}
                                 <div id="qr-reader" className="w-full max-w-sm rounded-xl overflow-hidden mb-4 border border-slate-700 bg-black min-h-[250px]"></div>
-                                
                                 <p className="text-slate-400 text-sm mb-1">จุดส่งสินค้าที่คุณต้องสแกนคือ:</p>
                                 <h3 className="text-blue-400 font-bold text-3xl tracking-wide">{expectedLocation}</h3>
                             </div>
@@ -385,7 +479,7 @@
                 }
             }, [locations]);
 
-            const handleSubmit = (e) => { e.preventDefault(); onCreateRequest(formData); setShowForm(false); };
+            const handleSubmit = (e) => { e.preventDefault(); onCreateRequest(formData); setShowForm(false); setFormData({ ...formData, note: '' }); };
             
             const myRequests = (requests || []).filter(r => r && String(r.requesterId) === String(currentUserId) && r.status !== 'completed').sort((a,b) => new Date(b.date) - new Date(a.date));
             const today = new Date().toISOString().split('T')[0];
@@ -401,13 +495,17 @@
                                 <div><label className="text-sm">วันที่</label><input required type="date" min={today} className="w-full p-2 border rounded" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
                                 <div><label className="text-sm">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
                             </div>
-                            <div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-slate-500">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">ยืนยัน</button></div>
+                            <div className="mt-4">
+                                <label className="text-sm font-medium text-slate-600">หมายเหตุ (ระบุเพิ่มเติม)</label>
+                                <input type="text" className="w-full p-2 border rounded mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} placeholder="เช่น ติดต่อคุณ A, ระวังสินค้าแตกหัก" />
+                            </div>
+                            <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-slate-500">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">ยืนยัน</button></div>
                         </form></Card>
                     )}
                     <div className="grid gap-4">
                         {myRequests.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีรายการคำขอ</div>
-                        ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div><div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} • {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div></div></div></Card>))}
+                        ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div><div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt)} • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div>{req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}</div></div></Card>))}
                     </div>
                 </div>
             );
@@ -441,7 +539,20 @@
                         <div className="grid gap-4">
                             {availableRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีงานว่างในขณะนี้</div>
-                            ) : availableRequests.map(req => (<Card key={req.id} className="border-l-4 border-amber-400"><div className="font-bold text-lg">{req.pickup} → {req.dropoff}</div><div className="text-sm text-slate-500 mb-4">{req.date} • ผู้ขอ: {req.requesterName}</div><div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">เที่ยวที่ {i+1} <button onClick={()=>onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button></div>)}</div></Card>))}
+                            ) : availableRequests.map(req => (
+                                <Card key={req.id} className="border-l-4 border-amber-400">
+                                    <div className="mb-4">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">#{req.id}</span>
+                                            <span className="text-sm text-slate-500">{req.date} {formatTimeHelper(req.createdAt)}</span>
+                                        </div>
+                                        <div className="font-bold text-lg">{req.pickup} → {req.dropoff}</div>
+                                        <div className="text-sm text-slate-500 mt-1">ผู้ขอ: {req.requesterName}</div>
+                                        {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                                    </div>
+                                    <div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">เที่ยวที่ {i+1} <button onClick={()=>onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button></div>)}</div>
+                                </Card>
+                            ))}
                         </div>
                     )}
                     
@@ -449,7 +560,19 @@
                         <div className="grid gap-4">
                             {myRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">คุณยังไม่มีงานที่ต้องรับผิดชอบ</div>
-                            ) : myRequests.map(req => (<Card key={req.id} className="border-blue-200"><div className="flex justify-between items-start"><div><div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div><div className="text-sm text-slate-500 mt-1">วันที่: {req.date}</div></div><StatusBadge status={req.status} /></div><div className="space-y-2 mt-4">{(req.trips||[]).filter(t=>String(t.driverId)===String(currentUser.id) && t.status!=='finished').map((trip, i) => (<div key={trip.id} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg"><div><div className="font-medium text-blue-800">เที่ยวของคุณ</div><div className="text-xs text-slate-500 mt-1">สถานะ: <span className="font-medium">{trip.status}</span></div></div><div className="flex gap-2">{trip.status === 'waiting' && <button onClick={()=>onUpdateTripStatus(req.id, trip.id, 'start')} className="bg-blue-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Play size={14}/> เริ่มเดินทาง</button>}{trip.status === 'ongoing' && <button onClick={()=>{setScanData({reqId:req.id, tripId:trip.id, targetLocation:req.dropoff}); setShowScanner(true);}} className="bg-indigo-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Camera size={14}/> สแกนจบงาน</button>}</div></div>))}</div></Card>))}
+                            ) : myRequests.map(req => (
+                                <Card key={req.id} className="border-blue-200">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div>
+                                            <div className="text-sm text-slate-500 mt-1">วันที่: {req.date} {formatTimeHelper(req.createdAt)}</div>
+                                            {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                                        </div>
+                                        <StatusBadge status={req.status} />
+                                    </div>
+                                    <div className="space-y-2 mt-4">{(req.trips||[]).filter(t=>String(t.driverId)===String(currentUser.id) && t.status!=='finished').map((trip, i) => (<div key={trip.id} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg"><div><div className="font-medium text-blue-800">เที่ยวของคุณ</div><div className="text-xs text-slate-500 mt-1">สถานะ: <span className="font-medium">{trip.status}</span></div></div><div className="flex gap-2">{trip.status === 'waiting' && <button onClick={()=>onUpdateTripStatus(req.id, trip.id, 'start')} className="bg-blue-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Play size={14}/> เริ่มเดินทาง</button>}{trip.status === 'ongoing' && <button onClick={()=>{setScanData({reqId:req.id, tripId:trip.id, targetLocation:req.dropoff}); setShowScanner(true);}} className="bg-indigo-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Camera size={14}/> สแกนจบงาน</button>}</div></div>))}</div>
+                                </Card>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -512,7 +635,8 @@
                                     <div>
                                         <div className="flex gap-2 items-center"><span className="text-xs bg-slate-100 px-2 rounded">#{req.id}</span> <StatusBadge status={req.status}/></div>
                                         <div className="font-bold mt-1 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
-                                        <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date}</div>
+                                        <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date} {formatTimeHelper(req.createdAt)}</div>
+                                        {req.note && <div className="text-xs text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
                                     </div>
                                     <button onClick={() => {if(window.confirm('ลบ?')) setRequests(requests.filter(r=>r.id!==req.id))}} className="text-red-600 self-start p-2"><Trash2 size={18}/></button>
                                 </div>
@@ -785,9 +909,19 @@
             const [locations, setLocations] = useState([]);
             const [loading, setLoading] = useState(true);
             
+            // 💡 State สำหรับควบคุมหน้าจอ Install
+            const [showInstallPage, setShowInstallPage] = useState(false);
             const isUpdating = useRef(false);
 
             useEffect(() => {
+                // ตรวจสอบว่าแอปถูกเปิดในแบบแอป (Standalone) หรือเปิดผ่านเบราว์เซอร์ปกติ
+                const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                
+                // ถ้าเปิดผ่านเบราว์เซอร์ปกติ ให้เด้งหน้าจอ Install ก่อน
+                if (!isStandalone) {
+                    setShowInstallPage(true);
+                }
+
                 const savedUser = sessionStorage.getItem('transportSysUser');
                 if (savedUser) {
                     try { setCurrentUser(JSON.parse(savedUser)); } catch(e){}
@@ -922,6 +1056,11 @@
                     return req;
                 }));
             };
+
+            // 💡 ถ้าไม่ได้เปิดผ่านแอปที่ติดตั้งไว้ ให้แสดงหน้า Install ก่อน
+            if (showInstallPage) {
+                return <InstallScreen onSkip={() => setShowInstallPage(false)} />;
+            }
 
             if (loading) {
                 return (
