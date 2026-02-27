@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TransportSys</title>
+    
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script>
+        window.addEventListener('error', function(e) { console.error("Global Error:", e.message); });
+    </script>
+
+    <!-- Import Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root">
+        <div style="padding: 20px; color: #666; text-align: center; font-family: sans-serif; margin-top: 20vh;">
+            <div style="width: 40px; height: 40px; border: 4px solid #bfdbfe; border-top: 4px solid #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px auto;"></div>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            กำลังเชื่อมต่อกับระบบหลังบ้าน...
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, Component } = React;
+
+        // ==========================================
+        // 🚀 ตั้งค่า API_URL สำหรับติดต่อ Google Sheets
+        // ==========================================
+        // ⚠️ เดี๋ยวเราจะต้องเอาลิงก์ Web App จาก Google Apps Script (ที่ลงท้ายด้วย /exec) มาใส่ตรงนี้ในขั้นตอนถัดไปครับ
+        const API_URL = "https://script.google.com/macros/s/AKfycbxBp4lTwyZ21SOGZ2afHqM20apwhr8dyXW2N2RYP9BQxdZLO4vidHExR55cAJBqxpwgpA/exec"; 
+
+        const callAPI = async (action, payload = {}) => {
+            if (API_URL === "วาง_URL_WEB_APP_ของคุณที่นี่") {
+                console.error("กรุณาใส่ API_URL ก่อนใช้งาน");
+                return null;
+            }
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, ...payload })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error("API Error:", error);
+                throw error;
+            }
+        };
+
+        // 🛡️ Error Boundary
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="p-4 bg-red-50 text-red-800 m-4 rounded-lg border border-red-200">
+                            <h2 className="font-bold text-lg mb-2">⚠️ ระบบพบปัญหาในการแสดงผล</h2>
+                            <p className="text-sm">{this.state.error && this.state.error.toString()}</p>
+                            <button onClick={() => window.location.reload()} className="mt-4 bg-red-600 text-white px-4 py-2 rounded">รีเฟรชหน้าจอ</button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        // --- ICONS ---
+        const SvgIcon = ({ children, size = 24, className = '', color = "currentColor", ...rest }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...rest}>{children}</svg>
+        );
+        const Truck = (p) => <SvgIcon {...p}><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></SvgIcon>;
+        const MapPin = (p) => <SvgIcon {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></SvgIcon>;
+        const Calendar = (p) => <SvgIcon {...p}><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></SvgIcon>;
+        const Clock = (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></SvgIcon>;
+        const User = (p) => <SvgIcon {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></SvgIcon>;
+        const LogOut = (p) => <SvgIcon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></SvgIcon>;
+        const PlusCircle = (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></SvgIcon>;
+        const CheckCircle = (p) => <SvgIcon {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></SvgIcon>;
+        const AlertCircle = (p) => <SvgIcon {...p}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></SvgIcon>;
+        const Play = (p) => <SvgIcon {...p}><polygon points="5 3 19 12 5 21 5 3" /></SvgIcon>;
+        const FileText = (p) => <SvgIcon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></SvgIcon>;
+        const BarChart2 = (p) => <SvgIcon {...p}><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></SvgIcon>;
+        const Bell = (p) => <SvgIcon {...p}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></SvgIcon>;
+        const Search = (p) => <SvgIcon {...p}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></SvgIcon>;
+        const Lock = (p) => <SvgIcon {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></SvgIcon>;
+        const Eye = (p) => <SvgIcon {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></SvgIcon>;
+        const EyeOff = (p) => <SvgIcon {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></SvgIcon>;
+        const Users = (p) => <SvgIcon {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></SvgIcon>;
+        const Edit = (p) => <SvgIcon {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></SvgIcon>;
+        const Trash2 = (p) => <SvgIcon {...p}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></SvgIcon>;
+        const Save = (p) => <SvgIcon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></SvgIcon>;
+        const X = (p) => <SvgIcon {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></SvgIcon>;
+        const List = (p) => <SvgIcon {...p}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></SvgIcon>;
+        const MapIcon = (p) => <SvgIcon {...p}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" /><line x1="8" y1="2" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="22" /></SvgIcon>;
+        const CameraIcon = (p) => <SvgIcon {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></SvgIcon>;
+        const Camera = CameraIcon; 
+        const QrCode = (p) => <SvgIcon {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><rect x="7" y="7" width="3" height="3" /><rect x="14" y="7" width="3" height="3" /><rect x="7" y="14" width="3" height="3" /><rect x="14" y="14" width="3" height="3" /></SvgIcon>;
+        const PieChart = (p) => <SvgIcon {...p}><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></SvgIcon>;
+        const Download = (p) => <SvgIcon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></SvgIcon>;
+        const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
+
+        const Card = ({ children, className = '' }) => (<div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-6 ${className}`}>{children}</div>);
+        const StatusBadge = ({ status }) => {
+            const styles = { pending: 'bg-yellow-100 text-yellow-800', assigned: 'bg-blue-100 text-blue-800', in_progress: 'bg-indigo-100 text-indigo-800', completed: 'bg-green-100 text-green-800', cancelled: 'bg-red-100 text-red-800' };
+            const labels = { pending: 'รอคนรับงาน', assigned: 'มีคนรับแล้ว', in_progress: 'กำลังดำเนินการ', completed: 'เสร็จสิ้น', cancelled: 'ยกเลิก' };
+            return (<span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || 'bg-gray-100'}`}>{labels[status] || status}</span>);
+        };
+
+        // --- COMPONENTS ---
+
+        const QRScannerModal = ({ isOpen, onClose, onScanSuccess, expectedLocation }) => {
+            const [error, setError] = useState('');
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [step, setStep] = useState('scan'); 
+            const [pallets, setPallets] = useState('');
+            const fileInputRef = useRef(null);
+
+            useEffect(() => { 
+                if (isOpen) {
+                    setError('');
+                    setStep('scan'); 
+                    setPallets(''); 
+                    setIsProcessing(false);
+                }
+            }, [isOpen]);
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setIsProcessing(true);
+                setError('');
+
+                const html5QrCode = new window.Html5Qrcode("hidden-qr-reader");
+
+                html5QrCode.scanFile(file, true)
+                    .then(decodedText => {
+                        if (decodedText === expectedLocation || decodedText.includes(expectedLocation)) {
+                            setStep('input_pallets');
+                        } else {
+                            setError(`❌ สแกนผิดจุด!\nระบบต้องการป้าย: "${expectedLocation}"`);
+                        }
+                    })
+                    .catch(err => {
+                        setError('❌ ไม่พบ QR Code ในภาพ\nกรุณาพยายามถ่ายใหม่อีกครั้งให้ชัดเจน');
+                    })
+                    .finally(() => {
+                        setIsProcessing(false);
+                        html5QrCode.clear();
+                        if(fileInputRef.current) fileInputRef.current.value = ''; 
+                    });
+            };
+
+            const triggerCamera = () => { if (fileInputRef.current) fileInputRef.current.click(); };
+
+            const handleSimulateScan = (result) => {
+                if (result === 'success') {
+                    setStep('input_pallets');
+                } else {
+                    setError(`❌ จำลองสแกนผิดจุด! ระบบต้องการป้าย: "${expectedLocation}"`);
+                    setTimeout(() => setError(''), 4000);
+                }
+            };
+
+            const handleConfirmPallets = () => {
+                if (pallets === '' || Number(pallets) < 0) {
+                    setError('กรุณาระบุจำนวนพาเลทให้ถูกต้อง');
+                    return;
+                }
+                setError('');
+                setStep('success'); 
+                setTimeout(() => onScanSuccess(Number(pallets)), 1000);
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-[#0B1121] bg-opacity-95 z-50 flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="w-full max-w-sm bg-[#1A2235] rounded-2xl overflow-hidden relative border border-slate-700 shadow-2xl flex flex-col">
+                        <div className="p-4 flex justify-between items-center z-10 border-b border-slate-700/50">
+                            <span className="text-white font-semibold flex items-center gap-2">
+                                <CameraIcon size={20} className="text-blue-400"/> สแกน QR Code เพื่อจบงาน
+                            </span>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors"><X size={24} /></button>
+                        </div>
+
+                        <div id="hidden-qr-reader" style={{ display: 'none' }}></div>
+
+                        <div className="relative flex flex-col items-center justify-center pt-8 pb-8 px-6 flex-1 min-h-[350px]">
+                            {step === 'success' ? (
+                                <div className="flex flex-col items-center animate-in zoom-in duration-300">
+                                    <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+                                        <CheckCircle size={40} color="white" />
+                                    </div>
+                                    <h3 className="text-white font-bold text-xl">บันทึกสำเร็จ!</h3>
+                                    <p className="text-green-400 text-sm mt-1">กำลังบันทึกข้อมูลและปิดงาน...</p>
+                                </div>
+                            ) : step === 'input_pallets' ? (
+                                <div className="w-full flex flex-col items-center animate-in slide-in-from-right-4 duration-300">
+                                    <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
+                                        <CheckCircle size={32} className="text-blue-400" />
+                                    </div>
+                                    <h3 className="text-white font-bold text-2xl mb-2">ระบุจำนวนพาเลท</h3>
+                                    <p className="text-slate-400 text-sm mb-6 text-center">คุณรับสินค้ามาทั้งหมดกี่พาเลทในเที่ยวนี้?</p>
+                                    
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        value={pallets}
+                                        onChange={(e) => setPallets(e.target.value)}
+                                        className="w-32 text-center text-4xl font-bold bg-[#0B1121] text-white border-2 border-slate-600 rounded-2xl py-4 outline-none focus:border-blue-500 mb-6 transition-colors"
+                                        placeholder="0"
+                                        autoFocus
+                                    />
+                                    <button 
+                                        onClick={handleConfirmPallets}
+                                        className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_0_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95"
+                                    >
+                                        <Save size={20} />
+                                        ยืนยันและจบงาน
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="w-full flex flex-col items-center">
+                                    {isProcessing ? (
+                                        <div className="flex flex-col items-center bg-[#1E293B] w-full rounded-xl p-8 mb-6 border border-slate-700">
+                                            <div className="w-10 h-10 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin mb-4"></div>
+                                            <p className="text-blue-400 font-medium text-sm">กำลังวิเคราะห์รูปภาพ...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="w-full bg-[#1E293B] rounded-xl p-6 mb-6 border border-slate-700 shadow-inner flex flex-col items-center">
+                                            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+                                            <button onClick={triggerCamera} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_0_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95">
+                                                <CameraIcon size={24} /> ถ่ายรูป QR Code (เปิดกล้อง)
+                                            </button>
+                                        </div>
+                                    )}
+                                    <p className="text-slate-400 text-sm mb-1">จุดส่งสินค้าที่คุณต้องสแกนคือ:</p>
+                                    <h3 className="text-blue-400 font-bold text-3xl tracking-wide">{expectedLocation}</h3>
+                                </div>
+                            )}
+
+                            {error && (
+                                <div className="mt-6 w-full bg-red-900/50 text-red-200 p-3 rounded-xl border border-red-800 text-sm text-center animate-in slide-in-from-bottom-2">
+                                    <span className="leading-relaxed whitespace-pre-line">{error}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {step === 'scan' && (
+                            <div className="p-4 bg-[#111827] border-t border-slate-800 w-full">
+                                <p className="text-[10px] text-slate-500 text-center mb-2 uppercase tracking-widest">ระบบจำลอง (สำหรับการทดสอบ)</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => handleSimulateScan('success')} className="bg-green-600/20 hover:bg-green-600/40 text-green-400 py-2.5 rounded-lg text-sm font-semibold border border-green-600/30 flex items-center justify-center gap-2 transition-colors"><CheckCircle size={16} /> จำลองสแกนถูกจุด</button>
+                                    <button onClick={() => handleSimulateScan('fail')} className="bg-red-900/30 hover:bg-red-800/50 text-red-400 py-2.5 rounded-lg text-sm font-semibold border border-red-800/50 flex items-center justify-center gap-2 transition-colors"><X size={16} /> จำลองสแกนผิดจุด</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const LoginScreen = ({ users, onLogin, refreshData }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [showPassword, setShowPassword] = useState(false);
+            const [isResetMode, setIsResetMode] = useState(false);
+            const [resetUsername, setResetUsername] = useState('');
+            const [oldPassword, setOldPassword] = useState(''); 
+            const [newPassword, setNewPassword] = useState('');
+            const [isResetting, setIsResetting] = useState(false);
+            const [resetMsg, setResetMsg] = useState({ type: '', text: '' });
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (!users || users.length === 0) {
+                    setError('กำลังโหลดข้อมูล Database กรุณารอสักครู่'); return;
+                }
+                const user = users.find(u => String(u.username) === String(username) && String(u.password) === String(password));
+                if (user) { setError(''); onLogin(user); } else { setError('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง'); }
+            };
+
+            const handleResetPassword = (e) => {
+                e.preventDefault();
+                const userValid = users.find(u => String(u.username) === String(resetUsername) && String(u.password) === String(oldPassword));
+                if (!userValid) { setResetMsg({ type: 'error', text: 'ชื่อผู้ใช้งานหรือรหัสผ่านเดิมไม่ถูกต้อง' }); return; }
+
+                setIsResetting(true);
+                setResetMsg({ type: 'info', text: 'กำลังดำเนินการ...' });
+                
+                callAPI('resetUserPassword', { username: resetUsername, newPassword })
+                    .then(res => {
+                        setIsResetting(false);
+                        if (res && res.success) {
+                            setResetMsg({ type: 'success', text: 'เปลี่ยนรหัสผ่านสำเร็จ' });
+                            refreshData();
+                            setTimeout(() => { setIsResetMode(false); setResetMsg({ type: '', text: '' }); setResetUsername(''); setOldPassword(''); setNewPassword(''); }, 2500);
+                        } else {
+                            setResetMsg({ type: 'error', text: res ? res.message : 'เกิดข้อผิดพลาด' });
+                        }
+                    })
+                    .catch(err => {
+                        setIsResetting(false);
+                        setResetMsg({ type: 'error', text: 'เกิดข้อผิดพลาดในการเชื่อมต่อ API' });
+                    });
+            };
+
+            if (isResetMode) {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-md space-y-6">
+                            <div className="text-center">
+                                <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Lock size={32} className="text-blue-600"/></div>
+                                <h1 className="text-2xl font-bold text-slate-800">เปลี่ยนรหัสผ่าน</h1>
+                                <p className="text-slate-500 text-sm mt-1">กรุณากรอกข้อมูลเพื่อยืนยันตัวตนและตั้งรหัสผ่านใหม่</p>
+                            </div>
+                            <form onSubmit={handleResetPassword} className="space-y-4">
+                                {resetMsg.text && (
+                                    <div className={`p-3 text-sm rounded-lg flex items-center gap-2 ${resetMsg.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : resetMsg.type === 'error' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
+                                        {resetMsg.type === 'success' ? <CheckCircle size={16}/> : resetMsg.type === 'error' ? <AlertCircle size={16}/> : <Clock size={16}/>} {resetMsg.text}
+                                    </div>
+                                )}
+                                <div className="space-y-1"><label className="text-sm font-medium text-slate-700">ชื่อผู้ใช้งาน</label><input type="text" value={resetUsername} onChange={(e) => setResetUsername(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required disabled={isResetting} /></div>
+                                <div className="space-y-1"><label className="text-sm font-medium text-slate-700">รหัสผ่านเดิม</label><input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required disabled={isResetting} /></div>
+                                <div className="space-y-1"><label className="text-sm font-medium text-slate-700">รหัสผ่านใหม่</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required disabled={isResetting} minLength="3" /></div>
+                                <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium shadow-sm mt-2 flex justify-center items-center gap-2" disabled={isResetting}>{isResetting ? <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span> : <Save size={18}/>} ยืนยัน</button>
+                                <button type="button" onClick={() => { setIsResetMode(false); setResetMsg({ type: '', text: '' }); }} className="w-full bg-slate-100 text-slate-600 py-2.5 rounded-lg hover:bg-slate-200 font-medium mt-2" disabled={isResetting}>ยกเลิก</button>
+                            </form>
+                        </Card>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-md space-y-8">
+                        <div className="text-center">
+                            <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Truck size={32} color="white"/></div>
+                            <h1 className="text-2xl font-bold text-slate-800">เข้าสู่ระบบ</h1>
+                            <p className="text-slate-500 text-sm mt-1">ระบบเรียกรถขนส่ง</p>
+                        </div>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            {error && <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex items-center gap-2"><AlertCircle size={16} />{error}</div>}
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-slate-700">ชื่อผู้ใช้งาน</label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-2.5 text-slate-400"><User size={18} /></div>
+                                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-slate-700">รหัสผ่าน</label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-2.5 text-slate-400"><Lock size={18} /></div>
+                                    <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-10 pr-10 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" required />
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"><EyeOff size={18} /></button>
+                                </div>
+                            </div>
+                            <button type="submit" className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 font-medium shadow-sm mt-2" disabled={!users || users.length === 0}>
+                                {(!users || users.length === 0) ? 'กำลังเชื่อมต่อ Database...' : 'เข้าสู่ระบบ'}
+                            </button>
+                            <div className="text-center pt-2"><button type="button" onClick={() => setIsResetMode(true)} className="text-sm text-blue-600 hover:text-blue-800 hover:underline">เปลี่ยนรหัสผ่าน?</button></div>
+                        </form>
+                    </Card>
+                </div>
+            );
+        };
+
+        const RequesterDashboard = ({ requests, onCreateRequest, currentUserId, locations }) => {
+            const [showForm, setShowForm] = useState(false);
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, note: '' });
+
+            useEffect(() => {
+                if (locations.length > 0 && !formData.pickup) {
+                    setFormData(prev => ({...prev, pickup: locations[0]?.name||'', dropoff: locations[1]?.name||locations[0]?.name||''}));
+                }
+            }, [locations]);
+
+            const handleSubmit = (e) => { e.preventDefault(); onCreateRequest(formData); setShowForm(false); };
+            
+            const myRequests = (requests || []).filter(r => r && String(r.requesterId) === String(currentUserId) && r.status !== 'completed').sort((a,b) => new Date(b.date) - new Date(a.date));
+            const today = new Date().toISOString().split('T')[0];
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center"><h2 className="text-xl font-bold">รายการคำขอของฉัน</h2><button onClick={() => setShowForm(!showForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"><PlusCircle size={16}/> สร้างคำขอ</button></div>
+                    {showForm && (
+                        <Card><form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-sm">รับ</label><select required className="w-full p-2 border rounded" value={formData.pickup} onChange={e=>setFormData({...formData, pickup: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                <div><label className="text-sm">ส่ง</label><select required className="w-full p-2 border rounded" value={formData.dropoff} onChange={e=>setFormData({...formData, dropoff: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                <div><label className="text-sm">วันที่</label><input required type="date" min={today} className="w-full p-2 border rounded" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
+                                <div><label className="text-sm">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
+                            </div>
+                            <div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-slate-500">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">ยืนยัน</button></div>
+                        </form></Card>
+                    )}
+                    <div className="grid gap-4">
+                        {myRequests.length === 0 ? (
+                            <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีรายการคำขอ</div>
+                        ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div><div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} • {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div></div></div></Card>))}
+                    </div>
+                </div>
+            );
+        };
+
+        const DriverDashboard = ({ requests, currentUser, onAcceptTrip, onUpdateTripStatus }) => {
+            const [activeTab, setActiveTab] = useState('my-jobs');
+            const [showScanner, setShowScanner] = useState(false);
+            const [scanData, setScanData] = useState({ reqId: null, tripId: null, targetLocation: '' });
+
+            const availableRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => !t.driverId));
+            const myRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled').sort((a,b) => b.id - a.id);
+
+            const handleScanSuccess = (pallets) => {
+                if (scanData.reqId && scanData.tripId) {
+                    onUpdateTripStatus(scanData.reqId, scanData.tripId, 'end', pallets);
+                    setShowScanner(false);
+                    setScanData({ reqId: null, tripId: null, targetLocation: '' });
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <QRScannerModal isOpen={showScanner} onClose={() => setShowScanner(false)} onScanSuccess={handleScanSuccess} expectedLocation={scanData.targetLocation} />
+                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full md:w-max">
+                        <button onClick={() => setActiveTab('my-jobs')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 ${activeTab==='my-jobs'?'bg-white shadow text-blue-600':'text-slate-600'}`}><Briefcase size={16}/> งานของฉัน</button>
+                        <button onClick={() => setActiveTab('pool')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 ${activeTab==='pool'?'bg-white shadow text-blue-600':'text-slate-600'}`}><Bell size={16}/> งานว่าง ({availableRequests.length})</button>
+                    </div>
+                    
+                    {activeTab === 'pool' && (
+                        <div className="grid gap-4">
+                            {availableRequests.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีงานว่างในขณะนี้</div>
+                            ) : availableRequests.map(req => (<Card key={req.id} className="border-l-4 border-amber-400"><div className="font-bold text-lg">{req.pickup} → {req.dropoff}</div><div className="text-sm text-slate-500 mb-4">{req.date} • ผู้ขอ: {req.requesterName}</div><div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">เที่ยวที่ {i+1} <button onClick={()=>onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button></div>)}</div></Card>))}
+                        </div>
+                    )}
+                    
+                    {activeTab === 'my-jobs' && (
+                        <div className="grid gap-4">
+                            {myRequests.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">คุณยังไม่มีงานที่ต้องรับผิดชอบ</div>
+                            ) : myRequests.map(req => (<Card key={req.id} className="border-blue-200"><div className="flex justify-between items-start"><div><div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div><div className="text-sm text-slate-500 mt-1">วันที่: {req.date}</div></div><StatusBadge status={req.status} /></div><div className="space-y-2 mt-4">{(req.trips||[]).filter(t=>String(t.driverId)===String(currentUser.id) && t.status!=='finished').map((trip, i) => (<div key={trip.id} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg"><div><div className="font-medium text-blue-800">เที่ยวของคุณ</div><div className="text-xs text-slate-500 mt-1">สถานะ: <span className="font-medium">{trip.status}</span></div></div><div className="flex gap-2">{trip.status === 'waiting' && <button onClick={()=>onUpdateTripStatus(req.id, trip.id, 'start')} className="bg-blue-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Play size={14}/> เริ่มเดินทาง</button>}{trip.status === 'ongoing' && <button onClick={()=>{setScanData({reqId:req.id, tripId:trip.id, targetLocation:req.dropoff}); setShowScanner(true);}} className="bg-indigo-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Camera size={14}/> สแกนจบงาน</button>}</div></div>))}</div></Card>))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const AdminUserManagement = ({ users, setUsers }) => {
+            const [isEditing, setIsEditing] = useState(null);
+            const [formData, setFormData] = useState({ name: '', username: '', password: '', role: 'requester' });
+            const [isAdding, setIsAdding] = useState(false);
+
+            const resetForm = () => { setFormData({ name: '', username: '', password: '', role: 'requester' }); setIsEditing(null); setIsAdding(false); };
+            const handleSave = (e) => {
+                e.preventDefault();
+                if (isEditing) setUsers(users.map(u => u.id === isEditing ? { ...u, ...formData } : u)); else setUsers([...users, { ...formData, id: Date.now() }]);
+                resetForm();
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Users size={20} /> จัดการผู้ใช้งาน</h3>{!isAdding && !isEditing && (<button onClick={() => setIsAdding(true)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-2"><PlusCircle size={16} /> เพิ่มผู้ใช้งาน</button>)}</div>
+                    {(isAdding || isEditing) && (
+                        <Card className="bg-slate-50 border-blue-200">
+                           <form onSubmit={handleSave} className="grid gap-4 md:grid-cols-2">
+                              <div><label className="text-xs">ชื่อ-นามสกุล</label><input required className="w-full p-2 border rounded" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} /></div>
+                              <div><label className="text-xs">บทบาท</label><select className="w-full p-2 border rounded" value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value})}><option value="requester">Requester</option><option value="driver">Driver</option><option value="admin">Admin</option></select></div>
+                              <div><label className="text-xs">Username</label><input required className="w-full p-2 border rounded" value={formData.username} onChange={e=>setFormData({...formData, username: e.target.value})} /></div>
+                              <div><label className="text-xs">Password</label><input required className="w-full p-2 border rounded" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>
+                              <div className="md:col-span-2 flex gap-2 justify-end mt-2"><button type="button" onClick={resetForm} className="px-4 py-2 bg-slate-200 rounded">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded flex items-center gap-2"><Save size={16}/> บันทึก</button></div>
+                           </form>
+                        </Card>
+                    )}
+                    <div className="bg-white rounded-lg border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-100 text-slate-600"><tr><th className="p-3">ชื่อ</th><th className="p-3">Username</th><th className="p-3">Role</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y">{users.map(u => (<tr key={u.id} className="hover:bg-slate-50"><td className="p-3 font-medium">{u.name}</td><td className="p-3 text-slate-500">{u.username}</td><td className="p-3"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{u.role}</span></td><td className="p-3 text-right flex justify-end gap-2"><button onClick={() => {setFormData(u); setIsEditing(u.id);}} className="text-blue-600 p-1"><Edit size={16}/></button><button onClick={() => {if(window.confirm('ลบ?')) setUsers(users.filter(x=>x.id!==u.id))}} className="text-red-600 p-1"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
+                </div>
+            );
+        };
+
+        const AdminLocationManagement = ({ locations, setLocations }) => {
+            const [name, setName] = useState('');
+            const handleSave = (e) => { e.preventDefault(); setLocations([...locations, { id: Date.now(), name }]); setName(''); };
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><MapIcon size={20} /> จัดการสถานที่</h3>
+                    <Card className="bg-slate-50 border-blue-200">
+                        <form onSubmit={handleSave} className="flex gap-4 items-end"><div className="flex-1"><label className="text-xs">ชื่อสถานที่</label><input required className="w-full p-2 border rounded" value={name} onChange={e=>setName(e.target.value)} /></div><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded flex items-center gap-2"><PlusCircle size={16}/> เพิ่ม</button></form>
+                    </Card>
+                    <div className="bg-white rounded-lg border overflow-hidden"><table className="w-full text-sm text-left"><thead className="bg-slate-100"><tr><th className="p-3">ชื่อสถานที่</th><th className="p-3 text-right">ลบ</th></tr></thead><tbody className="divide-y">{locations.map(loc => (<tr key={loc.id}><td className="p-3">{loc.name}</td><td className="p-3 text-right"><button onClick={() => setLocations(locations.filter(l=>l.id!==loc.id))} className="text-red-600 p-1"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
+                </div>
+            );
+        };
+
+        const AdminRequestManagement = ({ requests, setRequests }) => {
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} /> จัดการรายการเรียกรถ</h3>
+                    <div className="grid gap-4">
+                        {requests.map(req => (
+                            <Card key={req.id}>
+                                <div className="flex justify-between">
+                                    <div>
+                                        <div className="flex gap-2 items-center"><span className="text-xs bg-slate-100 px-2 rounded">#{req.id}</span> <StatusBadge status={req.status}/></div>
+                                        <div className="font-bold mt-1 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
+                                        <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date}</div>
+                                    </div>
+                                    <button onClick={() => {if(window.confirm('ลบ?')) setRequests(requests.filter(r=>r.id!==req.id))}} className="text-red-600 self-start p-2"><Trash2 size={18}/></button>
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const AdminDashboard = ({ requests, setRequests, users, setUsers, locations, setLocations }) => {
+            const [activeTab, setActiveTab] = useState('stats');
+            const [filterType, setFilterType] = useState('all'); 
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+            const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+            const [startDate, setStartDate] = useState(''); 
+            const [endDate, setEndDate] = useState('');     
+            const [selectedDriver, setSelectedDriver] = useState('all');
+
+            const filteredRequests = useMemo(() => {
+                return (requests||[]).filter(req => {
+                    if (!req) return false;
+                    const hasValidTrip = (req.trips || []).some(trip => {
+                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return false;
+                        const tDate = trip.date || req.date;
+                        if (filterType === 'daily') return tDate === selectedDate;
+                        if (filterType === 'monthly') return tDate && tDate.startsWith(selectedMonth);
+                        if (filterType === 'range') { 
+                            if (!startDate || !endDate) return true; 
+                            return tDate >= startDate && tDate <= endDate;
+                        }
+                        return true;
+                    });
+                    return hasValidTrip;
+                });
+            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
+
+            let totalTrips = 0, completedTrips = 0, pendingTrips = 0, activeTrips = 0;
+
+            filteredRequests.forEach(req => {
+                if (req && req.trips) {
+                    req.trips.forEach(trip => {
+                        const tDate = trip.date || req.date;
+                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+                        if (filterType === 'daily' && tDate !== selectedDate) return;
+                        if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
+                        if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
+                        
+                        totalTrips++;
+                        if (trip.status === 'finished') completedTrips++;
+                        else if (trip.status === 'ongoing') activeTrips++;
+                        else pendingTrips++;
+                    });
+                }
+            });
+
+            const globalDailyVolumeMap = useMemo(() => {
+                const map = {};
+                (requests||[]).forEach(req => {
+                    if (req && req.trips) {
+                        req.trips.forEach(trip => {
+                            if (trip.status === 'finished') {
+                                const tDate = trip.date || req.date;
+                                if (!map[tDate]) map[tDate] = 0;
+                                map[tDate] += 1;
+                            }
+                        });
+                    }
+                });
+                return map;
+            }, [requests]);
+
+            const dailyChartData = useMemo(() => {
+                let start, end;
+                const today = new Date();
+                if (filterType === 'range' && startDate && endDate) {
+                    start = new Date(startDate); end = new Date(endDate);
+                } else if (filterType === 'monthly' && selectedMonth) {
+                    const [y, m] = selectedMonth.split('-');
+                    start = new Date(y, m - 1, 1); end = new Date(y, m, 0);
+                } else if (filterType === 'daily' && selectedDate) {
+                    start = new Date(selectedDate); end = new Date(selectedDate);
+                } else {
+                    end = new Date(); start = new Date(); start.setDate(end.getDate() - 29);
+                }
+
+                const volumeMap = {};
+                const dateArray = [];
+                const curr = new Date(start);
+                
+                if (curr > end || isNaN(curr.getTime())) {
+                    dateArray.push(today.toISOString().split('T')[0]);
+                    volumeMap[today.toISOString().split('T')[0]] = 0;
+                } else {
+                    while (curr <= end) {
+                        const str = curr.toISOString().split('T')[0];
+                        volumeMap[str] = 0;
+                        dateArray.push(str);
+                        curr.setDate(curr.getDate() + 1);
+                    }
+                }
+
+                filteredRequests.forEach(req => {
+                    if (req && req.trips) {
+                        req.trips.forEach(trip => {
+                            const tDate = trip.date || req.date;
+                            if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+                            if (filterType === 'daily' && tDate !== selectedDate) return;
+                            if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
+                            if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
+
+                            if (trip.status === 'finished') {
+                                if (volumeMap.hasOwnProperty(tDate)) volumeMap[tDate] += 1;
+                            }
+                        });
+                    }
+                });
+                return dateArray.map(date => ({ date, count: volumeMap[date] }));
+            }, [filteredRequests, filterType, startDate, endDate, selectedMonth, selectedDate]);
+
+            const maxVolumeScale = useMemo(() => {
+                if (dailyChartData.length === 0) return 10;
+                const dates = dailyChartData.map(d => d.date);
+                const maxInPeriod = Math.max(...dates.map(date => globalDailyVolumeMap[date] || 0));
+                return maxInPeriod || 1;
+            }, [dailyChartData, globalDailyVolumeMap]);
+
+            const locationVolume = useMemo(() => {
+                const locMap = {};
+                filteredRequests.forEach(req => {
+                    if (req && req.dropoff && req.trips) {
+                        req.trips.forEach(trip => {
+                            const tDate = trip.date || req.date;
+                            if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+                            if (filterType === 'daily' && tDate !== selectedDate) return;
+                            if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
+                            if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
+
+                            if (trip.status === 'finished') {
+                                if (!locMap[req.dropoff]) locMap[req.dropoff] = 0;
+                                locMap[req.dropoff] += 1;
+                            }
+                        });
+                    }
+                });
+                return Object.keys(locMap).map(name => ({ name, count: locMap[name] })).sort((a,b) => b.count - a.count);
+            }, [filteredRequests, selectedDriver, filterType, selectedDate, selectedMonth, startDate, endDate]);
+
+            const maxVolumeLoc = Math.max(...locationVolume.map(d => d.count), 1);
+
+            const handleExport = () => {
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Trips\n" + filteredRequests.map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.tripsNeeded}`).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `transport_data_${filterType}.csv`);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
+
+            const handleExportTrips = () => {
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Trip ID,Date,Pickup,Dropoff,Driver,Start Time,End Time,Pallets\n" 
+                    + filteredRequests.flatMap(req => 
+                        (req.trips||[]).filter(t => {
+                                const tDate = t.date || req.date;
+                                if (selectedDriver !== 'all' && String(t.driverId) !== String(selectedDriver)) return false;
+                                if (filterType === 'daily' && tDate !== selectedDate) return false;
+                                if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return false;
+                                if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return false;
+                                return t.status === 'finished';
+                            }).map(t => `${t.id},${t.date || req.date},"${req.pickup}","${req.dropoff}","${t.driverName || ''}",${t.startTime || ''},${t.endTime || ''},${t.pallets || 0}`)
+                        ).join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `completed_trips_data.csv`);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex gap-2 overflow-x-auto pb-2 border-b">
+                        <button onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'stats' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><BarChart2 size={16} /> ภาพรวม</button>
+                        <button onClick={() => setActiveTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'users' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><Users size={16} /> จัดการผู้ใช้งาน</button>
+                        <button onClick={() => setActiveTab('locations')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'locations' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><MapIcon size={16} /> จัดการสถานที่</button>
+                        <button onClick={() => setActiveTab('requests')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'requests' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><List size={16} /> จัดการรายการเรียกรถ</button>
+                    </div>
+
+                    {activeTab === 'stats' && (
+                        <div className="space-y-6 animate-in fade-in duration-300">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <h2 className="text-xl font-bold text-slate-800">Admin Dashboard</h2>
+                                <div className="flex gap-2">
+                                    <button onClick={handleExport} className="flex items-center gap-2 text-sm bg-white border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 text-slate-700"><FileText size={16} /> Export Requests</button>
+                                    <button onClick={handleExportTrips} className="flex items-center gap-2 text-sm bg-blue-600 border border-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 shadow-sm"><Download size={16} /> Export Trips CSV</button>
+                                </div>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <Card className="border-blue-100 bg-white">
+                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><BarChart2 size={20} className="text-blue-500" /> ปริมาณงานรายวัน (สำเร็จแล้ว)</h3>
+                                    <div className="h-64 flex items-end gap-2 overflow-x-auto pb-4 px-2 scrollbar-thin scrollbar-thumb-slate-200">
+                                        {dailyChartData.map((item, index) => {
+                                            const safeCount = item.count || 0;
+                                            const heightPercentage = Math.min(100, Math.max(0, (safeCount / maxVolumeScale) * 100));
+                                            const d = new Date(item.date);
+                                            const dateLabel = !isNaN(d.getTime()) ? `${d.getDate()}/${d.getMonth() + 1}` : item.date;
+                                            return (
+                                                <div key={index} className="flex-1 min-w-[30px] group flex flex-col items-center gap-1">
+                                                    <div className="relative w-full flex flex-col justify-end items-center h-full">
+                                                        <div className="absolute -top-8 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">{safeCount} เที่ยว</div>
+                                                        <div className="w-full bg-blue-500 rounded-t-sm hover:bg-blue-600 transition-all relative" style={{ height: `${heightPercentage}%`, minHeight: item.count > 0 ? '4px' : '0' }}></div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-400 -rotate-90 origin-top-left mt-2 translate-y-4 whitespace-nowrap">{dateLabel}</div>
+                                                </div>
+                                            );
+                                        })}
+                                        {dailyChartData.length === 0 && <div className="w-full h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>}
+                                    </div>
+                                </Card>
+
+                                <Card className="border-blue-100 bg-white">
+                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><PieChart size={20} className="text-green-500" /> ปริมาณงานแยกตามจุดส่ง (สำเร็จแล้ว)</h3>
+                                    <div className="h-64 overflow-y-auto pr-2 space-y-3">
+                                        {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
+                                            <div key={index} className="group">
+                                                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600 font-medium">{loc.name}</span><span className="text-slate-500">{loc.count} เที่ยว</span></div>
+                                                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-green-500 h-full rounded-full group-hover:bg-green-600 transition-all duration-500" style={{ width: `${(loc.count / maxVolumeLoc) * 100}%` }}></div></div>
+                                            </div>
+                                        )) : (<div className="h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>)}
+                                    </div>
+                                </Card>
+                            </div>
+
+                            <Card className="bg-slate-50 border-blue-100">
+                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                                    <div className="w-full md:w-auto">
+                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">ช่วงเวลา</label>
+                                        <select className="w-full md:w-40 p-2 border rounded-lg text-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                                            <option value="all">ทั้งหมด (All Time)</option><option value="daily">รายวัน (Daily)</option><option value="monthly">รายเดือน (Monthly)</option><option value="range">ช่วงเวลา (Custom Range)</option>
+                                        </select>
+                                    </div>
+                                    {filterType === 'daily' && (<div className="w-full md:w-auto"><label className="text-xs font-semibold text-slate-500 mb-1 block">เลือกวันที่</label><input type="date" className="w-full p-2 border rounded-lg text-sm" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /></div>)}
+                                    {filterType === 'monthly' && (<div className="w-full md:w-auto"><label className="text-xs font-semibold text-slate-500 mb-1 block">เลือกเดือน</label><input type="month" className="w-full p-2 border rounded-lg text-sm" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} /></div>)}
+                                    {filterType === 'range' && (<div className="flex gap-2 w-full md:w-auto"><div><label className="text-xs font-semibold text-slate-500 mb-1 block">เริ่มต้น</label><input type="date" className="w-full p-2 border rounded-lg text-sm" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div><div><label className="text-xs font-semibold text-slate-500 mb-1 block">สิ้นสุด</label><input type="date" className="w-full p-2 border rounded-lg text-sm" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div></div>)}
+                                    <div className="w-full md:w-auto">
+                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">คนขับ (Driver)</label>
+                                        <select className="w-full md:w-48 p-2 border rounded-lg text-sm" value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)}><option value="all">คนขับทั้งหมด (All Drivers)</option>{(users||[]).filter(u => u && u.role === 'driver').map(d => (<option key={d.id} value={d.id}>{d.name}</option>))}</select>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[{ label: 'Total (Trips)', val: totalTrips, color: 'text-slate-800', bg: 'bg-white' }, { label: 'Finished', val: completedTrips, color: 'text-green-600', bg: 'bg-green-50' }, { label: 'Ongoing', val: activeTrips, color: 'text-blue-600', bg: 'bg-blue-50' }, { label: 'Waiting', val: pendingTrips, color: 'text-amber-600', bg: 'bg-amber-50' }].map((stat, i) => (
+                                    <div key={i} className={`${stat.bg} p-4 rounded-xl border border-slate-100 shadow-sm`}><div className="text-slate-500 text-xs uppercase tracking-wide font-semibold mb-1">{stat.label}</div><div className={`text-3xl font-bold ${stat.color}`}>{stat.val}</div></div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} />)}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [users, setUsers] = useState([]);
+            const [requests, setRequests] = useState([]);
+            const [locations, setLocations] = useState([]);
+            const [loading, setLoading] = useState(true);
+            
+            const isUpdating = useRef(false);
+
+            useEffect(() => {
+                const savedUser = localStorage.getItem('transportSysUser');
+                if (savedUser) {
+                    try { setCurrentUser(JSON.parse(savedUser)); } catch(e){}
+                }
+                
+                fetchData(true);
+
+                // โหลดข้อมูลทุก 10 วินาที
+                const interval = setInterval(() => {
+                    fetchData(false); 
+                }, 10000); 
+
+                return () => clearInterval(interval);
+            }, []);
+
+            const fetchData = (showLoading = true) => {
+                if (isUpdating.current) return; 
+
+                if (showLoading) setLoading(true);
+                
+                // ใช้ API แทน google.script.run
+                callAPI('getInitialData')
+                    .then(data => {
+                        if (data && !isUpdating.current) { 
+                            if(data.users) setUsers(data.users);
+                            if(data.requests) setRequests(data.requests);
+                            if(data.locations) setLocations(data.locations);
+                        }
+                        if (showLoading) setLoading(false);
+                    })
+                    .catch((error) => {
+                        console.error(error);
+                        if (showLoading) setLoading(false);
+                    });
+            };
+
+            const handleLogin = (user) => {
+                setCurrentUser(user);
+                localStorage.setItem('transportSysUser', JSON.stringify(user));
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                localStorage.removeItem('transportSysUser');
+            };
+
+            const handleCreateRequest = (data) => {
+                isUpdating.current = true; 
+                const newReqId = Date.now();
+                const initialTrips = Array.from({ length: data.tripsNeeded }, (_, i) => ({ 
+                    id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null 
+                }));
+                const newReq = { 
+                    id: newReqId, requesterId: currentUser.id, requesterName: currentUser.name, 
+                    ...data, status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
+                };
+                
+                setRequests([newReq, ...requests]); 
+                
+                callAPI('createRequest', { reqData: newReq })
+                    .then(() => {
+                        isUpdating.current = false;
+                        fetchData(false); 
+                    })
+                    .catch(() => { isUpdating.current = false; });
+            };
+
+            const handleAcceptTrip = (reqId, tripId) => {
+                isUpdating.current = true;
+
+                setRequests(requests.map(req => {
+                    if (req.id === reqId) {
+                        const updatedTrips = req.trips.map(t => t.id === tripId ? { ...t, driverId: currentUser.id, driverName: currentUser.name } : t);
+                        let newStatus = req.status;
+                        const takenCount = updatedTrips.filter(t => t.driverId).length;
+                        if (req.status === 'pending' && takenCount > 0) newStatus = 'assigned';
+                        if (takenCount === req.tripsNeeded) newStatus = 'assigned';
+                        
+                        callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name, pallets: 0 })
+                            .then(() => {
+                                if (newStatus !== req.status) {
+                                    return callAPI('updateRequestStatus', { reqId, status: newStatus });
+                                }
+                            })
+                            .then(() => {
+                                isUpdating.current = false; 
+                                fetchData(false); 
+                            })
+                            .catch(() => { isUpdating.current = false; });
+
+                        return { ...req, trips: updatedTrips, status: newStatus };
+                    }
+                    return req;
+                }));
+            };
+
+            const handleUpdateTripStatus = (reqId, tripId, action, pallets = 0) => {
+                isUpdating.current = true; 
+
+                setRequests(requests.map(req => {
+                    if (req.id === reqId) {
+                        const timeString = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                        const dateString = new Date().toISOString().split('T')[0];
+
+                        const updatedTrips = req.trips.map(t => {
+                            if (t.id === tripId) {
+                                if (action === 'start') return { ...t, status: 'ongoing', startTime: timeString };
+                                else if (action === 'end') return { ...t, status: 'finished', endTime: timeString, date: dateString, pallets: Number(pallets) }; 
+                            }
+                            return t;
+                        });
+                        
+                        const completed = updatedTrips.filter(t => t.status === 'finished').length;
+                        const anyOngoing = updatedTrips.some(t => t.status === 'ongoing');
+                        let reqStatus = req.status;
+                        
+                        if (completed >= Number(req.tripsNeeded)) reqStatus = 'completed';
+                        else if (anyOngoing || completed > 0) reqStatus = 'in_progress';
+                        
+                        callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
+                            .then(() => {
+                                if (reqStatus !== req.status) {
+                                    return callAPI('updateRequestStatus', { reqId, status: reqStatus });
+                                }
+                            })
+                            .then(() => {
+                                isUpdating.current = false; 
+                                fetchData(false);
+                            })
+                            .catch(() => { isUpdating.current = false; });
+
+                        return { ...req, trips: updatedTrips, tripsCompleted: completed, status: reqStatus };
+                    }
+                    return req;
+                }));
+            };
+
+            if (loading) {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center bg-slate-50">
+                        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4" style={{animation: 'spin 1s linear infinite'}}></div>
+                        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                        <h2 className="text-slate-600 font-medium text-lg">กำลังโหลดข้อมูลจากฐานข้อมูล...</h2>
+                    </div>
+                );
+            }
+            
+            if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} refreshData={() => fetchData(true)} />;
+
+            return (
+                <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+                        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-blue-600 p-1.5 rounded-lg"><Truck className="text-white w-5 h-5" /></div>
+                                <span className="font-bold text-lg text-slate-800 hidden md:block">TransportSys</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col items-end mr-2">
+                                    <span className="text-sm font-semibold text-slate-700">{currentUser.name}</span>
+                                    <span className="text-xs text-slate-400 uppercase">{currentUser.role}</span>
+                                </div>
+                                <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-full"><LogOut size={20} /></button>
+                            </div>
+                        </div>
+                    </header>
+                    <main className="max-w-5xl mx-auto px-4 py-8">
+                        {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} locations={locations} />)}
+                        {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
+                        {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} />)}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ErrorBoundary><App /></ErrorBoundary>);
+    </script>
+</body>
+</html>
