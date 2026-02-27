@@ -25,7 +25,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
         
-        /* ซ่อนข้อความรบกวนในตัวสแกนกล้อง */
+        /* ซ่อนข้อความของตัวสแกนกล้องให้ดูสะอาดขึ้น */
         #qr-reader__dashboard_section_csr span { display: none !important; }
         #qr-reader { border: none !important; }
     </style>
@@ -42,7 +42,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, Component } = React;
 
-        // 💡 API URL ที่ชี้ไปยัง Google Apps Script ของคุณ
+        // 💡 1. API URL ของคุณ (อัปเดตแล้ว)
         const API_URL = "https://script.google.com/macros/s/AKfycbxBp4lTwyZ21SOGZ2afHqM20apwhr8dyXW2N2RYP9BQxdZLO4vidHExR55cAJBqxpwgpA/exec"; 
 
         const callAPI = async (action, payload = {}) => {
@@ -123,7 +123,7 @@
 
         // --- COMPONENTS ---
 
-        // 💡 ระบบกล้อง Live Scanner (เปิดกล้องสแกนสด) ไม่มีปุ่มจำลองแล้ว
+        // 💡 2. ระบบกล้อง Live Scanner (เปิดกล้องสแกนสด + นำปุ่มจำลองออก)
         const QRScannerModal = ({ isOpen, onClose, onScanSuccess, expectedLocation }) => {
             const [error, setError] = useState('');
             const [step, setStep] = useState('scan'); 
@@ -141,10 +141,9 @@
                 let html5QrCode = null;
 
                 if (isOpen && step === 'scan') {
-                    // สร้าง instance ของไลบรารีสแกนกล้อง
                     html5QrCode = new window.Html5Qrcode("qr-reader");
 
-                    // เปิดกล้องสดทันที
+                    // สั่งเปิดกล้องหลังแบบสด
                     html5QrCode.start(
                         { facingMode: "environment" },
                         { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -158,14 +157,13 @@
                             }
                         },
                         (errorMessage) => {
-                            // สแกนไปเรื่อยๆ จนกว่าจะเจอ
+                            // ปล่อยให้มันเงียบๆ เวลากำลังสแกนหา
                         }
                     ).catch((err) => {
                         setError("❌ ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบสิทธิ์กล้อง (Camera Permission)");
                     });
                 }
 
-                // สั่งปิดกล้องอัตโนมัติเมื่อผู้ใช้กดปิดหน้าต่างหรือสแกนผ่าน
                 return () => {
                     if (html5QrCode && html5QrCode.isScanning) {
                         html5QrCode.stop().catch(console.error);
@@ -231,7 +229,7 @@
                                 </div>
                             ) : (
                                 <div className="w-full flex flex-col items-center">
-                                    {/* 💡 กล่องแสดงภาพกล้องสด */}
+                                    {/* 💡 กล่องนี้จะดึงภาพจากกล้องมาแสดงสดๆ */}
                                     <div id="qr-reader" className="w-full max-w-sm rounded-xl overflow-hidden mb-4 border border-slate-700 bg-black min-h-[250px] flex items-center justify-center relative">
                                         <div className="absolute inset-0 flex items-center justify-center text-slate-500">
                                             กำลังเปิดกล้อง...
@@ -773,7 +771,7 @@
             
             const isUpdating = useRef(false);
 
-            // 💡 4. แก้ปัญหา Login ค้าง โดยใช้ sessionStorage แทน localStorage
+            // 💡 3. ใช้ sessionStorage ป้องกันการ Login ค้าง
             useEffect(() => {
                 const savedUser = sessionStorage.getItem('transportSysUser');
                 if (savedUser) {
@@ -809,13 +807,11 @@
                     });
             };
 
-            // 💡 ใช้ sessionStorage ตอนล็อคอิน
             const handleLogin = (user) => {
                 setCurrentUser(user);
                 sessionStorage.setItem('transportSysUser', JSON.stringify(user));
             };
 
-            // 💡 เคลียร์ sessionStorage ตอนล็อกเอาท์
             const handleLogout = () => {
                 setCurrentUser(null);
                 sessionStorage.removeItem('transportSysUser');
