@@ -130,6 +130,7 @@
         const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
         const Share = (p) => <SvgIcon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></SvgIcon>;
 
+        // 💡 ฟังก์ชันช่วยแปลงเวลาให้แสดงเฉพาะ ชั่วโมง:นาที อย่างถูกต้อง
         const formatTimeHelper = (isoString) => {
             if (!isoString) return '';
             try {
@@ -178,30 +179,15 @@
             return (
                 <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
                     <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in duration-500 relative">
-                        
-                        {/* ไอคอนด้านบน */}
                         <div className="pt-10 pb-6 flex flex-col items-center bg-gradient-to-b from-blue-50 to-white relative">
                             <button onClick={onSkip} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 font-medium text-sm">ข้าม</button>
-                            <img 
-                                src="https://cdn-icons-png.flaticon.com/512/709/709790.png" 
-                                alt="App Mascot" 
-                                className="w-40 h-40 object-contain drop-shadow-lg animate-float"
-                            />
+                            <img src="https://cdn-icons-png.flaticon.com/512/709/709790.png" alt="App Mascot" className="w-40 h-40 object-contain drop-shadow-lg animate-float" />
                         </div>
-
-                        {/* ข้อความและปุ่ม */}
                         <div className="px-6 pb-10 text-center">
                             <h1 className="text-2xl font-bold text-slate-800 mb-2 leading-tight">Transport<br/>Management App</h1>
-                            <button 
-                                onClick={handleInstallClick}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] transition-all active:scale-95 mt-6 mb-4"
-                            >
-                                Install
-                            </button>
+                            <button onClick={handleInstallClick} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg py-3.5 rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] transition-all active:scale-95 mt-6 mb-4">Install</button>
                             <p className="text-slate-500 text-sm">We'll also create a shortcut</p>
                         </div>
-                        
-                        {/* คำแนะนำสำหรับ iOS */}
                         {showIosInstruction && (
                             <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-50 animate-in fade-in">
                                 <div className="bg-white p-6 rounded-2xl text-center w-full relative">
@@ -223,7 +209,7 @@
 
         // --- COMPONENTS ---
 
-        // ระบบกล้อง Live Scanner (แก้บั๊ก removeChild Error)
+        // 💡 ระบบกล้อง Live Scanner (มีหน้าให้ระบุจำนวนพาเลท)
         const QRScannerModal = ({ isOpen, onClose, onScanSuccess, expectedLocation }) => {
             const [error, setError] = useState('');
             const [step, setStep] = useState('scan'); 
@@ -252,7 +238,7 @@
                                     if (scannerRef.current) {
                                         scannerRef.current.stop().then(() => {
                                             scannerRef.current.clear();
-                                            setStep('input_pallets');
+                                            setStep('input_pallets'); // ไปหน้ากรอกพาเลท
                                         }).catch(err => console.error(err));
                                     }
                                 } else {
@@ -471,7 +457,8 @@
 
         const RequesterDashboard = ({ requests, onCreateRequest, currentUserId, locations }) => {
             const [showForm, setShowForm] = useState(false);
-            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, note: '' });
+            // 💡 เพิ่มค่า pallets ในแบบฟอร์มให้คนเรียกรถกรอก
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '' });
 
             useEffect(() => {
                 if (locations.length > 0 && !formData.pickup) {
@@ -479,7 +466,12 @@
                 }
             }, [locations]);
 
-            const handleSubmit = (e) => { e.preventDefault(); onCreateRequest(formData); setShowForm(false); setFormData({ ...formData, note: '' }); };
+            const handleSubmit = (e) => { 
+                e.preventDefault(); 
+                onCreateRequest(formData); 
+                setShowForm(false); 
+                setFormData({ ...formData, note: '', pallets: '' }); 
+            };
             
             const myRequests = (requests || []).filter(r => r && String(r.requesterId) === String(currentUserId) && r.status !== 'completed').sort((a,b) => new Date(b.date) - new Date(a.date));
             const today = new Date().toISOString().split('T')[0];
@@ -489,23 +481,33 @@
                     <div className="flex justify-between items-center"><h2 className="text-xl font-bold">รายการคำขอของฉัน</h2><button onClick={() => setShowForm(!showForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"><PlusCircle size={16}/> สร้างคำขอ</button></div>
                     {showForm && (
                         <Card><form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="text-sm">รับ</label><select required className="w-full p-2 border rounded" value={formData.pickup} onChange={e=>setFormData({...formData, pickup: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
-                                <div><label className="text-sm">ส่ง</label><select required className="w-full p-2 border rounded" value={formData.dropoff} onChange={e=>setFormData({...formData, dropoff: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
-                                <div><label className="text-sm">วันที่</label><input required type="date" min={today} className="w-full p-2 border rounded" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
-                                <div><label className="text-sm">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label className="text-sm font-medium text-slate-600">รับ</label><select required className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.pickup} onChange={e=>setFormData({...formData, pickup: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                <div><label className="text-sm font-medium text-slate-600">ส่ง</label><select required className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.dropoff} onChange={e=>setFormData({...formData, dropoff: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                <div><label className="text-sm font-medium text-slate-600">วันที่</label><input required type="date" min={today} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
+                                
+                                <div className="flex gap-4">
+                                    <div className="flex-1"><label className="text-sm font-medium text-slate-600">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
+                                    {/* 💡 ช่องกรอก จำนวนพาเลท */}
+                                    <div className="flex-1"><label className="text-sm font-medium text-slate-600">จำนวนพาเลท</label><input required type="number" min="1" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.pallets} onChange={e=>setFormData({...formData, pallets: parseInt(e.target.value) || ''})} placeholder="ระบุจำนวน" /></div>
+                                </div>
                             </div>
                             <div className="mt-4">
                                 <label className="text-sm font-medium text-slate-600">หมายเหตุ (ระบุเพิ่มเติม)</label>
-                                <input type="text" className="w-full p-2 border rounded mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} placeholder="เช่น ติดต่อคุณ A, ระวังสินค้าแตกหัก" />
+                                <input type="text" className="w-full p-2 border rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-500" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} placeholder="เช่น ติดต่อคุณ A, ระวังสินค้าแตกหัก" />
                             </div>
-                            <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-slate-500">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">ยืนยัน</button></div>
+                            <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-slate-500">ยกเลิก</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">ยืนยัน</button></div>
                         </form></Card>
                     )}
                     <div className="grid gap-4">
                         {myRequests.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีรายการคำขอ</div>
-                        ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div><div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt)} • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div>{req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}</div></div></Card>))}
+                        ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
+                        {/* 💡 แสดงเวลาการสร้างคำขอที่ถูกต้อง ด้วย formatTimeHelper */}
+                        <div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt)} น. • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div>
+                        {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1 font-medium">จำนวน: {req.pallets} พาเลท</div>}
+                        {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                        </div></div></Card>))}
                     </div>
                 </div>
             );
@@ -519,6 +521,7 @@
             const availableRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => !t.driverId));
             const myRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled').sort((a,b) => b.id - a.id);
 
+            // 💡 รับค่าพาเลทที่กรอกจาก QRScannerModal ส่งต่อให้ฟังก์ชันอัปเดตสถานะตอนจบงาน
             const handleScanSuccess = (pallets) => {
                 if (scanData.reqId && scanData.tripId) {
                     onUpdateTripStatus(scanData.reqId, scanData.tripId, 'end', pallets);
@@ -544,13 +547,18 @@
                                     <div className="mb-4">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">#{req.id}</span>
-                                            <span className="text-sm text-slate-500">{req.date} {formatTimeHelper(req.createdAt)}</span>
+                                            <span className="text-sm text-slate-500">{req.date} {formatTimeHelper(req.createdAt)} น.</span>
                                         </div>
                                         <div className="font-bold text-lg">{req.pickup} → {req.dropoff}</div>
-                                        <div className="text-sm text-slate-500 mt-1">ผู้ขอ: {req.requesterName}</div>
+                                        <div className="text-sm text-slate-500 mt-1">ผู้ขอ: {req.requesterName} {req.pallets > 0 && <span className="text-slate-500 font-medium mx-1">• {req.pallets} พาเลท</span>}</div>
                                         {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
                                     </div>
-                                    <div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">เที่ยวที่ {i+1} <button onClick={()=>onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button></div>)}</div>
+                                    <div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && (
+                                        <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">
+                                            เที่ยวที่ {i+1} 
+                                            <button onClick={() => onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button>
+                                        </div>
+                                    ))}</div>
                                 </Card>
                             ))}
                         </div>
@@ -560,19 +568,29 @@
                         <div className="grid gap-4">
                             {myRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">คุณยังไม่มีงานที่ต้องรับผิดชอบ</div>
-                            ) : myRequests.map(req => (
-                                <Card key={req.id} className="border-blue-200">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div>
-                                            <div className="text-sm text-slate-500 mt-1">วันที่: {req.date} {formatTimeHelper(req.createdAt)}</div>
-                                            {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                            ) : myRequests.map(req => {
+                                // 💡 ดึงเวลาที่รับงานขึ้นมาแสดง (ข้อมูลนี้ถูกอ่านมาจาก DB ที่เราเพิ่งให้บันทึก)
+                                const myTrip = req.trips.find(t => String(t.driverId) === String(currentUser.id));
+
+                                return (
+                                    <Card key={req.id} className="border-blue-200">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div>
+                                                <div className="text-sm text-slate-500 mt-1">
+                                                    วันที่: {req.date}
+                                                    {/* 💡 แสดงเวลาหลังวันที่เฉพาะตอนที่รับงานแล้ว (ดึงมาจาก DB) */}
+                                                    {myTrip?.acceptedTime && <span className="ml-2 text-blue-600 font-medium">(รับงาน {myTrip.acceptedTime} น.)</span>}
+                                                </div>
+                                                {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1">จำนวน: {req.pallets} พาเลท</div>}
+                                                {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                                            </div>
+                                            <StatusBadge status={req.status} />
                                         </div>
-                                        <StatusBadge status={req.status} />
-                                    </div>
-                                    <div className="space-y-2 mt-4">{(req.trips||[]).filter(t=>String(t.driverId)===String(currentUser.id) && t.status!=='finished').map((trip, i) => (<div key={trip.id} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg"><div><div className="font-medium text-blue-800">เที่ยวของคุณ</div><div className="text-xs text-slate-500 mt-1">สถานะ: <span className="font-medium">{trip.status}</span></div></div><div className="flex gap-2">{trip.status === 'waiting' && <button onClick={()=>onUpdateTripStatus(req.id, trip.id, 'start')} className="bg-blue-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Play size={14}/> เริ่มเดินทาง</button>}{trip.status === 'ongoing' && <button onClick={()=>{setScanData({reqId:req.id, tripId:trip.id, targetLocation:req.dropoff}); setShowScanner(true);}} className="bg-indigo-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Camera size={14}/> สแกนจบงาน</button>}</div></div>))}</div>
-                                </Card>
-                            ))}
+                                        <div className="space-y-2 mt-4">{(req.trips||[]).filter(t=>String(t.driverId)===String(currentUser.id) && t.status!=='finished').map((trip, i) => (<div key={trip.id} className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-lg"><div><div className="font-medium text-blue-800">เที่ยวของคุณ</div><div className="text-xs text-slate-500 mt-1">สถานะ: <span className="font-medium">{trip.status}</span></div></div><div className="flex gap-2">{trip.status === 'waiting' && <button onClick={()=>onUpdateTripStatus(req.id, trip.id, 'start')} className="bg-blue-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Play size={14}/> เริ่มเดินทาง</button>}{trip.status === 'ongoing' && <button onClick={()=>{setScanData({reqId:req.id, tripId:trip.id, targetLocation:req.dropoff}); setShowScanner(true);}} className="bg-indigo-600 text-white px-3 py-2 rounded shadow-sm text-sm flex items-center gap-1"><Camera size={14}/> สแกนจบงาน</button>}</div></div>))}</div>
+                                    </Card>
+                                )
+                            })}
                         </div>
                     )}
                 </div>
@@ -635,8 +653,8 @@
                                     <div>
                                         <div className="flex gap-2 items-center"><span className="text-xs bg-slate-100 px-2 rounded">#{req.id}</span> <StatusBadge status={req.status}/></div>
                                         <div className="font-bold mt-1 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
-                                        <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date} {formatTimeHelper(req.createdAt)}</div>
-                                        {req.note && <div className="text-xs text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
+                                        <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date} {formatTimeHelper(req.createdAt)} น.</div>
+                                        {req.pallets > 0 && <div className="text-xs text-slate-600 mt-1 font-medium">จำนวน: {req.pallets} พาเลท</div>}
                                     </div>
                                     <button onClick={() => {if(window.confirm('ลบ?')) setRequests(requests.filter(r=>r.id!==req.id))}} className="text-red-600 self-start p-2"><Trash2 size={18}/></button>
                                 </div>
@@ -788,7 +806,7 @@
             const maxVolumeLoc = Math.max(...locationVolume.map(d => d.count), 1);
 
             const handleExport = () => {
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Trips\n" + filteredRequests.map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.tripsNeeded}`).join("\n");
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Pallets,Trips\n" + filteredRequests.map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.pallets || 0},${r.tripsNeeded}`).join("\n");
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
@@ -797,6 +815,7 @@
             };
 
             const handleExportTrips = () => {
+                // 💡 Export พาเลทด้วย
                 const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Trip ID,Date,Pickup,Dropoff,Driver,Start Time,End Time,Pallets\n" 
                     + filteredRequests.flatMap(req => 
                         (req.trips||[]).filter(t => {
@@ -909,20 +928,16 @@
             const [locations, setLocations] = useState([]);
             const [loading, setLoading] = useState(true);
             
-            // 💡 State สำหรับควบคุมหน้าจอ Install
             const [showInstallPage, setShowInstallPage] = useState(false);
             const isUpdating = useRef(false);
 
             useEffect(() => {
-                // ตรวจสอบว่าแอปถูกเปิดในแบบแอป (Standalone) หรือเปิดผ่านเบราว์เซอร์ปกติ
                 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-                
-                // ถ้าเปิดผ่านเบราว์เซอร์ปกติ ให้เด้งหน้าจอ Install ก่อน
                 if (!isStandalone) {
                     setShowInstallPage(true);
                 }
 
-                const savedUser = sessionStorage.getItem('transportSysUser');
+                const savedUser = localStorage.getItem('transportSysUser');
                 if (savedUser) {
                     try { setCurrentUser(JSON.parse(savedUser)); } catch(e){}
                 }
@@ -958,23 +973,25 @@
 
             const handleLogin = (user) => {
                 setCurrentUser(user);
-                sessionStorage.setItem('transportSysUser', JSON.stringify(user));
+                localStorage.setItem('transportSysUser', JSON.stringify(user));
             };
 
             const handleLogout = () => {
                 setCurrentUser(null);
-                sessionStorage.removeItem('transportSysUser');
+                localStorage.removeItem('transportSysUser');
             };
 
             const handleCreateRequest = (data) => {
                 isUpdating.current = true; 
                 const newReqId = Date.now();
                 const initialTrips = Array.from({ length: data.tripsNeeded }, (_, i) => ({ 
-                    id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null 
+                    id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null, acceptedTime: null 
                 }));
                 const newReq = { 
                     id: newReqId, requesterId: currentUser.id, requesterName: currentUser.name, 
-                    ...data, status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
+                    ...data, 
+                    pallets: data.pallets || 0, // 💡 รับค่าพาเลทที่กรอก
+                    status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
                 };
                 
                 setRequests([newReq, ...requests]); 
@@ -989,16 +1006,18 @@
 
             const handleAcceptTrip = (reqId, tripId) => {
                 isUpdating.current = true;
+                // 💡 จับเวลา ณ วินาทีที่กดรับงานไว้โชว์บนหน้าจอทันที
+                const timeString = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
 
                 setRequests(requests.map(req => {
                     if (req.id === reqId) {
-                        const updatedTrips = req.trips.map(t => t.id === tripId ? { ...t, driverId: currentUser.id, driverName: currentUser.name } : t);
+                        const updatedTrips = req.trips.map(t => t.id === tripId ? { ...t, driverId: currentUser.id, driverName: currentUser.name, acceptedTime: timeString } : t);
                         let newStatus = req.status;
                         const takenCount = updatedTrips.filter(t => t.driverId).length;
                         if (req.status === 'pending' && takenCount > 0) newStatus = 'assigned';
                         if (takenCount === req.tripsNeeded) newStatus = 'assigned';
                         
-                        callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name, pallets: 0 })
+                        callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name })
                             .then(() => {
                                 if (newStatus !== req.status) {
                                     return callAPI('updateRequestStatus', { reqId, status: newStatus });
@@ -1039,6 +1058,7 @@
                         if (completed >= Number(req.tripsNeeded)) reqStatus = 'completed';
                         else if (anyOngoing || completed > 0) reqStatus = 'in_progress';
                         
+                        // 💡 ส่งข้อมูลจำนวนพาเลท (pallets) ไปให้ Google Script ด้วย
                         callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
                             .then(() => {
                                 if (reqStatus !== req.status) {
@@ -1057,7 +1077,6 @@
                 }));
             };
 
-            // 💡 ถ้าไม่ได้เปิดผ่านแอปที่ติดตั้งไว้ ให้แสดงหน้า Install ก่อน
             if (showInstallPage) {
                 return <InstallScreen onSkip={() => setShowInstallPage(false)} />;
             }
