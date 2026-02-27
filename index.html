@@ -24,6 +24,10 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        /* ซ่อนข้อความรบกวนในตัวสแกนกล้อง */
+        #qr-reader__dashboard_section_csr span { display: none !important; }
+        #qr-reader { border: none !important; }
     </style>
 </head>
 <body class="bg-slate-50">
@@ -38,17 +42,10 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, Component } = React;
 
-        // ==========================================
-        // 🚀 ตั้งค่า API_URL สำหรับติดต่อ Google Sheets
-        // ==========================================
-        // ⚠️ เดี๋ยวเราจะต้องเอาลิงก์ Web App จาก Google Apps Script (ที่ลงท้ายด้วย /exec) มาใส่ตรงนี้ในขั้นตอนถัดไปครับ
+        // 💡 API URL ที่ชี้ไปยัง Google Apps Script ของคุณ
         const API_URL = "https://script.google.com/macros/s/AKfycbxBp4lTwyZ21SOGZ2afHqM20apwhr8dyXW2N2RYP9BQxdZLO4vidHExR55cAJBqxpwgpA/exec"; 
 
         const callAPI = async (action, payload = {}) => {
-            if (API_URL === "วาง_URL_WEB_APP_ของคุณที่นี่") {
-                console.error("กรุณาใส่ API_URL ก่อนใช้งาน");
-                return null;
-            }
             try {
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -62,7 +59,6 @@
             }
         };
 
-        // 🛡️ Error Boundary
         class ErrorBoundary extends React.Component {
             constructor(props) {
                 super(props);
@@ -127,59 +123,55 @@
 
         // --- COMPONENTS ---
 
+        // 💡 ระบบกล้อง Live Scanner (เปิดกล้องสแกนสด) ไม่มีปุ่มจำลองแล้ว
         const QRScannerModal = ({ isOpen, onClose, onScanSuccess, expectedLocation }) => {
             const [error, setError] = useState('');
-            const [isProcessing, setIsProcessing] = useState(false);
             const [step, setStep] = useState('scan'); 
             const [pallets, setPallets] = useState('');
-            const fileInputRef = useRef(null);
 
             useEffect(() => { 
                 if (isOpen) {
                     setError('');
                     setStep('scan'); 
                     setPallets(''); 
-                    setIsProcessing(false);
                 }
             }, [isOpen]);
 
-            const handleImageUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+            useEffect(() => {
+                let html5QrCode = null;
 
-                setIsProcessing(true);
-                setError('');
+                if (isOpen && step === 'scan') {
+                    // สร้าง instance ของไลบรารีสแกนกล้อง
+                    html5QrCode = new window.Html5Qrcode("qr-reader");
 
-                const html5QrCode = new window.Html5Qrcode("hidden-qr-reader");
-
-                html5QrCode.scanFile(file, true)
-                    .then(decodedText => {
-                        if (decodedText === expectedLocation || decodedText.includes(expectedLocation)) {
-                            setStep('input_pallets');
-                        } else {
-                            setError(`❌ สแกนผิดจุด!\nระบบต้องการป้าย: "${expectedLocation}"`);
+                    // เปิดกล้องสดทันที
+                    html5QrCode.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        (decodedText) => {
+                            if (decodedText === expectedLocation || decodedText.includes(expectedLocation)) {
+                                html5QrCode.stop().then(() => {
+                                    setStep('input_pallets');
+                                }).catch(err => console.error(err));
+                            } else {
+                                setError(`❌ สแกนผิดจุด!\nระบบต้องการป้าย: "${expectedLocation}"`);
+                            }
+                        },
+                        (errorMessage) => {
+                            // สแกนไปเรื่อยๆ จนกว่าจะเจอ
                         }
-                    })
-                    .catch(err => {
-                        setError('❌ ไม่พบ QR Code ในภาพ\nกรุณาพยายามถ่ายใหม่อีกครั้งให้ชัดเจน');
-                    })
-                    .finally(() => {
-                        setIsProcessing(false);
-                        html5QrCode.clear();
-                        if(fileInputRef.current) fileInputRef.current.value = ''; 
+                    ).catch((err) => {
+                        setError("❌ ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบสิทธิ์กล้อง (Camera Permission)");
                     });
-            };
-
-            const triggerCamera = () => { if (fileInputRef.current) fileInputRef.current.click(); };
-
-            const handleSimulateScan = (result) => {
-                if (result === 'success') {
-                    setStep('input_pallets');
-                } else {
-                    setError(`❌ จำลองสแกนผิดจุด! ระบบต้องการป้าย: "${expectedLocation}"`);
-                    setTimeout(() => setError(''), 4000);
                 }
-            };
+
+                // สั่งปิดกล้องอัตโนมัติเมื่อผู้ใช้กดปิดหน้าต่างหรือสแกนผ่าน
+                return () => {
+                    if (html5QrCode && html5QrCode.isScanning) {
+                        html5QrCode.stop().catch(console.error);
+                    }
+                };
+            }, [isOpen, step, expectedLocation]);
 
             const handleConfirmPallets = () => {
                 if (pallets === '' || Number(pallets) < 0) {
@@ -202,8 +194,6 @@
                             </span>
                             <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-full transition-colors"><X size={24} /></button>
                         </div>
-
-                        <div id="hidden-qr-reader" style={{ display: 'none' }}></div>
 
                         <div className="relative flex flex-col items-center justify-center pt-8 pb-8 px-6 flex-1 min-h-[350px]">
                             {step === 'success' ? (
@@ -241,19 +231,13 @@
                                 </div>
                             ) : (
                                 <div className="w-full flex flex-col items-center">
-                                    {isProcessing ? (
-                                        <div className="flex flex-col items-center bg-[#1E293B] w-full rounded-xl p-8 mb-6 border border-slate-700">
-                                            <div className="w-10 h-10 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin mb-4"></div>
-                                            <p className="text-blue-400 font-medium text-sm">กำลังวิเคราะห์รูปภาพ...</p>
+                                    {/* 💡 กล่องแสดงภาพกล้องสด */}
+                                    <div id="qr-reader" className="w-full max-w-sm rounded-xl overflow-hidden mb-4 border border-slate-700 bg-black min-h-[250px] flex items-center justify-center relative">
+                                        <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                                            กำลังเปิดกล้อง...
                                         </div>
-                                    ) : (
-                                        <div className="w-full bg-[#1E293B] rounded-xl p-6 mb-6 border border-slate-700 shadow-inner flex flex-col items-center">
-                                            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                                            <button onClick={triggerCamera} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg shadow-[0_4px_20px_0_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95">
-                                                <CameraIcon size={24} /> ถ่ายรูป QR Code (เปิดกล้อง)
-                                            </button>
-                                        </div>
-                                    )}
+                                    </div>
+                                    
                                     <p className="text-slate-400 text-sm mb-1">จุดส่งสินค้าที่คุณต้องสแกนคือ:</p>
                                     <h3 className="text-blue-400 font-bold text-3xl tracking-wide">{expectedLocation}</h3>
                                 </div>
@@ -265,16 +249,6 @@
                                 </div>
                             )}
                         </div>
-
-                        {step === 'scan' && (
-                            <div className="p-4 bg-[#111827] border-t border-slate-800 w-full">
-                                <p className="text-[10px] text-slate-500 text-center mb-2 uppercase tracking-widest">ระบบจำลอง (สำหรับการทดสอบ)</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => handleSimulateScan('success')} className="bg-green-600/20 hover:bg-green-600/40 text-green-400 py-2.5 rounded-lg text-sm font-semibold border border-green-600/30 flex items-center justify-center gap-2 transition-colors"><CheckCircle size={16} /> จำลองสแกนถูกจุด</button>
-                                    <button onClick={() => handleSimulateScan('fail')} className="bg-red-900/30 hover:bg-red-800/50 text-red-400 py-2.5 rounded-lg text-sm font-semibold border border-red-800/50 flex items-center justify-center gap-2 transition-colors"><X size={16} /> จำลองสแกนผิดจุด</button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             );
@@ -799,15 +773,15 @@
             
             const isUpdating = useRef(false);
 
+            // 💡 4. แก้ปัญหา Login ค้าง โดยใช้ sessionStorage แทน localStorage
             useEffect(() => {
-                const savedUser = localStorage.getItem('transportSysUser');
+                const savedUser = sessionStorage.getItem('transportSysUser');
                 if (savedUser) {
                     try { setCurrentUser(JSON.parse(savedUser)); } catch(e){}
                 }
                 
                 fetchData(true);
 
-                // โหลดข้อมูลทุก 10 วินาที
                 const interval = setInterval(() => {
                     fetchData(false); 
                 }, 10000); 
@@ -820,7 +794,6 @@
 
                 if (showLoading) setLoading(true);
                 
-                // ใช้ API แทน google.script.run
                 callAPI('getInitialData')
                     .then(data => {
                         if (data && !isUpdating.current) { 
@@ -836,14 +809,16 @@
                     });
             };
 
+            // 💡 ใช้ sessionStorage ตอนล็อคอิน
             const handleLogin = (user) => {
                 setCurrentUser(user);
-                localStorage.setItem('transportSysUser', JSON.stringify(user));
+                sessionStorage.setItem('transportSysUser', JSON.stringify(user));
             };
 
+            // 💡 เคลียร์ sessionStorage ตอนล็อกเอาท์
             const handleLogout = () => {
                 setCurrentUser(null);
-                localStorage.removeItem('transportSysUser');
+                sessionStorage.removeItem('transportSysUser');
             };
 
             const handleCreateRequest = (data) => {
