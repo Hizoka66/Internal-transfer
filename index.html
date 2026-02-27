@@ -130,7 +130,7 @@
         const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
         const Share = (p) => <SvgIcon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></SvgIcon>;
 
-        // 💡 ฟังก์ชันช่วยแปลงเวลาให้แสดงเฉพาะ ชั่วโมง:นาที อย่างถูกต้อง
+        // 💡 แปลงเวลาให้แสดงเฉพาะ ชั่วโมง:นาที อย่างถูกต้อง
         const formatTimeHelper = (isoString) => {
             if (!isoString) return '';
             try {
@@ -455,9 +455,8 @@
             );
         };
 
-        const RequesterDashboard = ({ requests, onCreateRequest, currentUserId, locations }) => {
+        const RequesterDashboard = ({ requests, onCreateRequest, currentUserId, currentUser, locations }) => {
             const [showForm, setShowForm] = useState(false);
-            // 💡 เพิ่มค่า pallets ในแบบฟอร์มให้คนเรียกรถกรอก
             const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '' });
 
             useEffect(() => {
@@ -473,7 +472,11 @@
                 setFormData({ ...formData, note: '', pallets: '' }); 
             };
             
-            const myRequests = (requests || []).filter(r => r && String(r.requesterId) === String(currentUserId) && r.status !== 'completed').sort((a,b) => new Date(b.date) - new Date(a.date));
+            // 💡 แก้บั๊กที่ 1: ตรวจสอบทั้งรหัสผู้ใช้ หรือ ชื่อผู้ใช้ สำรองไว้ เผื่อ Google Sheets ดึง ID กลับมาไม่ตรง
+            const myRequests = (requests || []).filter(r => 
+                r && (String(r.requesterId) === String(currentUserId) || String(r.requesterName) === String(currentUser.name)) && r.status !== 'completed'
+            ).sort((a,b) => new Date(b.date) - new Date(a.date));
+            
             const today = new Date().toISOString().split('T')[0];
 
             return (
@@ -488,7 +491,6 @@
                                 
                                 <div className="flex gap-4">
                                     <div className="flex-1"><label className="text-sm font-medium text-slate-600">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
-                                    {/* 💡 ช่องกรอก จำนวนพาเลท */}
                                     <div className="flex-1"><label className="text-sm font-medium text-slate-600">จำนวนพาเลท</label><input required type="number" min="1" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mt-1" value={formData.pallets} onChange={e=>setFormData({...formData, pallets: parseInt(e.target.value) || ''})} placeholder="ระบุจำนวน" /></div>
                                 </div>
                             </div>
@@ -503,7 +505,6 @@
                         {myRequests.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีรายการคำขอ</div>
                         ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
-                        {/* 💡 แสดงเวลาการสร้างคำขอที่ถูกต้อง ด้วย formatTimeHelper */}
                         <div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt)} น. • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div>
                         {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1 font-medium">จำนวน: {req.pallets} พาเลท</div>}
                         {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
@@ -521,7 +522,6 @@
             const availableRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => !t.driverId));
             const myRequests = (requests || []).filter(r => r && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled').sort((a,b) => b.id - a.id);
 
-            // 💡 รับค่าพาเลทที่กรอกจาก QRScannerModal ส่งต่อให้ฟังก์ชันอัปเดตสถานะตอนจบงาน
             const handleScanSuccess = (pallets) => {
                 if (scanData.reqId && scanData.tripId) {
                     onUpdateTripStatus(scanData.reqId, scanData.tripId, 'end', pallets);
@@ -569,8 +569,9 @@
                             {myRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">คุณยังไม่มีงานที่ต้องรับผิดชอบ</div>
                             ) : myRequests.map(req => {
-                                // 💡 ดึงเวลาที่รับงานขึ้นมาแสดง (ข้อมูลนี้ถูกอ่านมาจาก DB ที่เราเพิ่งให้บันทึก)
+                                // 💡 แก้บั๊กที่ 3: ดึงเวลาที่รับงานจาก LocalStorage ของเครื่องโดยไม่ต้องพึ่ง Database
                                 const myTrip = req.trips.find(t => String(t.driverId) === String(currentUser.id));
+                                const acceptedTimeLocal = myTrip ? localStorage.getItem(`accepted_time_${myTrip.id}`) : null;
 
                                 return (
                                     <Card key={req.id} className="border-blue-200">
@@ -579,8 +580,8 @@
                                                 <div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div>
                                                 <div className="text-sm text-slate-500 mt-1">
                                                     วันที่: {req.date}
-                                                    {/* 💡 แสดงเวลาหลังวันที่เฉพาะตอนที่รับงานแล้ว (ดึงมาจาก DB) */}
-                                                    {myTrip?.acceptedTime && <span className="ml-2 text-blue-600 font-medium">(รับงาน {myTrip.acceptedTime} น.)</span>}
+                                                    {/* 💡 แสดงเวลาที่รับงาน */}
+                                                    {acceptedTimeLocal && <span className="ml-2 text-blue-600 font-medium">(รับงาน {acceptedTimeLocal} น.)</span>}
                                                 </div>
                                                 {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1">จำนวน: {req.pallets} พาเลท</div>}
                                                 {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
@@ -815,7 +816,6 @@
             };
 
             const handleExportTrips = () => {
-                // 💡 Export พาเลทด้วย
                 const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Trip ID,Date,Pickup,Dropoff,Driver,Start Time,End Time,Pallets\n" 
                     + filteredRequests.flatMap(req => 
                         (req.trips||[]).filter(t => {
@@ -985,19 +985,20 @@
                 isUpdating.current = true; 
                 const newReqId = Date.now();
                 const initialTrips = Array.from({ length: data.tripsNeeded }, (_, i) => ({ 
-                    id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null, acceptedTime: null 
+                    id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null
                 }));
                 const newReq = { 
                     id: newReqId, requesterId: currentUser.id, requesterName: currentUser.name, 
                     ...data, 
-                    pallets: data.pallets || 0, // 💡 รับค่าพาเลทที่กรอก
+                    pallets: data.pallets || 0,
                     status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
                 };
                 
                 setRequests([newReq, ...requests]); 
                 
                 callAPI('createRequest', { reqData: newReq })
-                    .then(() => {
+                    .then((res) => {
+                        if (res && res.success === false) alert("⚠️ เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + res.message);
                         isUpdating.current = false;
                         fetchData(false); 
                     })
@@ -1006,12 +1007,14 @@
 
             const handleAcceptTrip = (reqId, tripId) => {
                 isUpdating.current = true;
-                // 💡 จับเวลา ณ วินาทีที่กดรับงานไว้โชว์บนหน้าจอทันที
+                
+                // 💡 แก้บั๊กที่ 3: จับเวลา ณ วินาทีที่กดรับงานไว้ใน LocalStorage ในเครื่อง
                 const timeString = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                localStorage.setItem(`accepted_time_${tripId}`, timeString);
 
                 setRequests(requests.map(req => {
                     if (req.id === reqId) {
-                        const updatedTrips = req.trips.map(t => t.id === tripId ? { ...t, driverId: currentUser.id, driverName: currentUser.name, acceptedTime: timeString } : t);
+                        const updatedTrips = req.trips.map(t => t.id === tripId ? { ...t, driverId: currentUser.id, driverName: currentUser.name } : t);
                         let newStatus = req.status;
                         const takenCount = updatedTrips.filter(t => t.driverId).length;
                         if (req.status === 'pending' && takenCount > 0) newStatus = 'assigned';
@@ -1058,7 +1061,6 @@
                         if (completed >= Number(req.tripsNeeded)) reqStatus = 'completed';
                         else if (anyOngoing || completed > 0) reqStatus = 'in_progress';
                         
-                        // 💡 ส่งข้อมูลจำนวนพาเลท (pallets) ไปให้ Google Script ด้วย
                         callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
                             .then(() => {
                                 if (reqStatus !== req.status) {
@@ -1111,7 +1113,7 @@
                         </div>
                     </header>
                     <main className="max-w-5xl mx-auto px-4 py-8">
-                        {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} locations={locations} />)}
+                        {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
                         {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} />)}
                     </main>
