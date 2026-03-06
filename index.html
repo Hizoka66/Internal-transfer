@@ -17,7 +17,7 @@
     <script>
         window.addEventListener('error', function(e) { console.error("Global Error:", e.message); });
         
-        // 💡 ลงทะเบียน Service Worker สำหรับ PWA
+        // 💡 ลงทะเบียน Service Worker สำหรับ PWA (ดัก Error ให้แล้ว)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 if (window.location.protocol.startsWith('http') && !window.location.href.includes('blob:')) {
@@ -613,6 +613,9 @@
             const [activeTab, setActiveTab] = useState('my-jobs');
             const [showScanner, setShowScanner] = useState(false);
             const [scanData, setScanData] = useState({ reqId: null, tripId: null, targetLocation: '' });
+            
+            // 💡 เพิ่ม State เพื่อเช็คว่าเบราว์เซอร์นี้เปิดแจ้งเตือนหรือยัง
+            const [permStatus, setPermStatus] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
 
             const availableRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => !t.driverId));
             const myRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled');
@@ -624,10 +627,34 @@
                     setScanData({ reqId: null, tripId: null, targetLocation: '' });
                 }
             };
+            
+            // 💡 ฟังก์ชันขอกดเปิดแจ้งเตือนด้วยตัวเอง (บังคับโดย User)
+            const requestNotifyPerm = () => {
+                if ('Notification' in window) {
+                    Notification.requestPermission().then(status => {
+                        setPermStatus(status);
+                        if (status === 'granted') alert('✅ เปิดการแจ้งเตือนสำเร็จ!');
+                        else alert('❌ ไม่สามารถเปิดแจ้งเตือนได้ (กรุณาตรวจสอบการตั้งค่าเบราว์เซอร์/มือถือของคุณ)');
+                    });
+                }
+            };
 
             return (
                 <div className="space-y-6">
                     <QRScannerModal isOpen={showScanner} onClose={() => setShowScanner(false)} onScanSuccess={handleScanSuccess} expectedLocation={scanData.targetLocation} />
+                    
+                    {/* 💡 แจ้งเตือนให้คนขับกดปุ่มเปิด Notification เพื่อป้องกันเบราว์เซอร์บล็อก */}
+                    {permStatus !== 'granted' && (
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl flex justify-between items-center shadow-sm animate-in fade-in">
+                            <div className="flex items-center gap-2 text-blue-800 text-sm font-medium">
+                                <Bell className="animate-bounce" size={18} /> เปิดรับการแจ้งเตือนเมื่อมีงานใหม่
+                            </div>
+                            <button onClick={requestNotifyPerm} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                                อนุญาต
+                            </button>
+                        </div>
+                    )}
+                    
                     <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full md:w-max relative">
                         <button onClick={() => setActiveTab('my-jobs')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 ${activeTab==='my-jobs'?'bg-white shadow text-blue-600':'text-slate-600'}`}><Briefcase size={16}/> งานของฉัน</button>
                         <button onClick={() => setActiveTab('pool')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 relative ${activeTab==='pool'?'bg-white shadow text-blue-600':'text-slate-600'}`}>
@@ -1386,12 +1413,18 @@
                     // คำนวณจำนวนงานที่ค้างอยู่ (Pending) ทั้งหมด
                     const pendingCount = requests.filter(r => r.status === 'pending').length;
 
-                    // 1. อัปเดตตัวเลขสีแดงบนไอคอนแอป (Badging API)
-                    if ('setAppBadge' in navigator) {
+                    // 1. อัปเดตตัวเลขสีแดงบนไอคอนแอป (Badging API) - รองรับ API รุ่นเก่าด้วย
+                    if (navigator.setAppBadge) {
                         if (pendingCount > 0) {
-                            navigator.setAppBadge(pendingCount).catch(console.error);
+                            navigator.setAppBadge(pendingCount).catch(e => console.log('Badge error:', e));
                         } else {
-                            navigator.clearAppBadge().catch(console.error);
+                            navigator.clearAppBadge().catch(e => console.log('Badge error:', e));
+                        }
+                    } else if (navigator.setExperimentalAppBadge) {
+                        if (pendingCount > 0) {
+                            navigator.setExperimentalAppBadge(pendingCount).catch(console.error);
+                        } else {
+                            navigator.clearExperimentalAppBadge().catch(console.error);
                         }
                     }
                     
@@ -1407,18 +1440,29 @@
                             
                             // 2. เด้งแจ้งเตือนระบบ (System Notification) นอกเบราว์เซอร์
                             if ('Notification' in window && Notification.permission === 'granted') {
-                                new Notification('TransportSys (งานใหม่)', {
-                                    body: msg,
-                                    icon: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
-                                    badge: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
-                                    tag: 'new-job'
-                                });
+                                // 💡 แก้ไขปัญหาแจ้งเตือนไม่เด้งบนมือถือ/PWA: ต้องใช้ Service Worker showNotification แทน new Notification
+                                if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+                                    navigator.serviceWorker.ready.then(registration => {
+                                        registration.showNotification('TransportSys (งานใหม่)', {
+                                            body: msg,
+                                            icon: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
+                                            badge: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
+                                            vibrate: [200, 100, 200, 100, 200],
+                                            tag: 'new-job-' + Date.now()
+                                        });
+                                    });
+                                } else {
+                                    new Notification('TransportSys (งานใหม่)', {
+                                        body: msg,
+                                        icon: 'https://cdn-icons-png.flaticon.com/512/709/709790.png'
+                                    });
+                                }
                             }
                             
                             // เล่นเสียง
                             try {
                                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                                audio.play();
+                                audio.play().catch(e => console.log('Auto-play blocked'));
                             } catch (e) { console.log('เบราว์เซอร์บล็อกการเล่นเสียงอัตโนมัติ'); }
 
                             setTimeout(() => setToastMsg(null), 6000);
@@ -1442,7 +1486,11 @@
                 setCurrentUser(null);
                 localStorage.removeItem('transportSysUser');
                 // ล้างตัวเลขที่ไอคอนตอนล็อกเอาต์
-                if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(console.error);
+                if ('clearAppBadge' in navigator) {
+                    navigator.clearAppBadge().catch(console.error);
+                } else if ('clearExperimentalAppBadge' in navigator) {
+                    navigator.clearExperimentalAppBadge().catch(console.error);
+                }
             };
 
             const handleCreateRequest = (data) => {
