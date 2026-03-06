@@ -16,9 +16,16 @@
     
     <script>
         window.addEventListener('error', function(e) { console.error("Global Error:", e.message); });
-        // 💡 ลงทะเบียน Service Worker สำหรับ PWA (ตรวจสอบ Protocol ก่อนเพื่อป้องกัน Error ในระบบ Preview)
-        if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
-            navigator.serviceWorker.register('./sw.js').catch(console.error);
+        
+        // 💡 ลงทะเบียน Service Worker สำหรับ PWA (ดัก Error ให้แล้ว)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                if (window.location.protocol.startsWith('http') && !window.location.href.includes('blob:')) {
+                    navigator.serviceWorker.register('./sw.js').catch(function(error) {
+                        console.log('Service Worker สแตนด์บายพร้อมทำงาน:', error.message);
+                    });
+                }
+            });
         }
     </script>
 
@@ -130,7 +137,7 @@
         const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
         const Share = (p) => <SvgIcon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></SvgIcon>;
 
-        // 💡 2. สูตรใหม่: ดึงเวลาจากรหัส ID (ที่สร้างด้วย Date.now() บนเครื่องคุณ) ทำให้เวลาเป๊ะ 100% เสมอ ข้ามปัญหาเรื่อง Timezone
+        // 💡 สูตรแปลงเวลาจาก ID เพื่อให้แสดงได้ตรงเป๊ะ (ดัก Error เวลากรณีไม่เข้าเงื่อนไข)
         const formatTimeHelper = (isoString, reqId) => {
             if (reqId && !isNaN(Number(reqId)) && Number(reqId) > 1600000000000) {
                 return new Date(Number(reqId)).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
@@ -507,7 +514,6 @@
                         {myRequests.length === 0 ? (
                             <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">ไม่มีรายการคำขอ</div>
                         ) : myRequests.map(req => (<Card key={req.id}><div className="flex justify-between"><div><StatusBadge status={req.status}/><div className="font-bold mt-2 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
-                        {/* 💡 1. แสดงเวลาการสร้างคำขอที่ถูกต้อง ด้วยสูตร formatTimeHelper ใหม่ */}
                         <div className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt, req.id)} น. • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว</div>
                         {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1 font-medium">จำนวน: {req.pallets} พาเลท</div>}
                         {req.note && <div className="text-sm text-amber-600 mt-1 font-medium">หมายเหตุ: {req.note}</div>}
@@ -550,7 +556,6 @@
                                     <div className="mb-4">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs text-slate-400 font-mono bg-slate-100 px-2 py-0.5 rounded">#{req.id}</span>
-                                            {/* 💡 2. แสดงเวลาปัจจุบันที่คำขอถูกสร้างขึ้นในงานว่างด้วย */}
                                             <span className="text-sm text-slate-500">{req.date} {formatTimeHelper(req.createdAt, req.id)} น.</span>
                                         </div>
                                         <div className="font-bold text-lg">{req.pickup} → {req.dropoff}</div>
@@ -573,7 +578,6 @@
                             {myRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 bg-transparent border-2 border-dashed border-slate-200 rounded-lg">คุณยังไม่มีงานที่ต้องรับผิดชอบ</div>
                             ) : myRequests.map(req => {
-                                // 💡 3. แก้ไขเรื่องการโชว์เวลาตอนรับงาน โดยเช็คจากฐานข้อมูลก่อน ถ้าไม่มีค่อยเช็คในความจำเครื่อง
                                 const myTrip = req.trips.find(t => String(t.driverId) === String(currentUser.id));
                                 const displayAcceptedTime = myTrip?.acceptedTime || localStorage.getItem(`accepted_time_${myTrip?.id}`);
 
@@ -584,7 +588,6 @@
                                                 <div className="font-bold text-lg text-slate-800">{req.pickup} → {req.dropoff}</div>
                                                 <div className="text-sm text-slate-500 mt-1">
                                                     วันที่: {req.date}
-                                                    {/* 💡 3. นำเวลาที่รับงานมาโชว์ */}
                                                     {displayAcceptedTime && <span className="ml-2 text-blue-600 font-medium">(รับงาน {displayAcceptedTime} น.)</span>}
                                                 </div>
                                                 {req.pallets > 0 && <div className="text-sm text-slate-600 mt-1">จำนวน: {req.pallets} พาเลท</div>}
@@ -647,21 +650,134 @@
             );
         };
 
-        const AdminRequestManagement = ({ requests, setRequests }) => {
+        // 💡 อัปเดตส่วน Admin ให้ จัดการใบงานได้แบบ Full Option (เพิ่ม/ลบ/แก้/ปิดจบ)
+        const AdminRequestManagement = ({ requests, setRequests, locations, onCreateRequest, onRefresh }) => {
+            const [isFormOpen, setIsFormOpen] = useState(false);
+            const [editId, setEditId] = useState(null);
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, note: '' });
+
+            const today = new Date().toISOString().split('T')[0];
+
+            useEffect(() => {
+                if (locations.length > 0 && !formData.pickup && !editId) {
+                    setFormData(prev => ({...prev, pickup: locations[0]?.name||'', dropoff: locations[1]?.name||locations[0]?.name||''}));
+                }
+            }, [locations, editId]);
+
+            const resetForm = () => {
+                setFormData({ pickup: locations[0]?.name||'', dropoff: locations[1]?.name||'', date: '', tripsNeeded: 1, note: '' });
+                setIsFormOpen(false);
+                setEditId(null);
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (editId) {
+                    setIsProcessing(true);
+                    const updateData = { id: editId, ...formData };
+                    callAPI('editRequest', { reqData: updateData })
+                        .then(res => {
+                            if (res && res.success) {
+                                alert('บันทึกการแก้ไขเรียบร้อยแล้ว');
+                                onRefresh(); 
+                            } else {
+                                alert('เกิดข้อผิดพลาดในการแก้ไข: ' + (res?.message || 'Unknown error'));
+                            }
+                            resetForm();
+                            setIsProcessing(false);
+                        });
+                } else {
+                    onCreateRequest(formData);
+                    resetForm();
+                }
+            };
+
+            const handleEdit = (req) => {
+                setFormData({ pickup: req.pickup, dropoff: req.dropoff, date: req.date, tripsNeeded: req.tripsNeeded, note: req.note || '' });
+                setEditId(req.id);
+                setIsFormOpen(true);
+            };
+
+            const handleDelete = (reqId) => {
+                if(window.confirm('⚠️ ยืนยันการลบใบงานนี้?\n(ข้อมูลเที่ยววิ่งทั้งหมดที่เกี่ยวข้องจะถูกลบทิ้งอย่างถาวร)')) {
+                    setRequests(requests.filter(r => r.id !== reqId)); 
+                    callAPI('deleteRequest', { reqId })
+                        .then(res => {
+                            if(res && res.success) {
+                                onRefresh(); 
+                            } else {
+                                alert('เกิดข้อผิดพลาดในการลบ');
+                            }
+                        });
+                }
+            };
+
+            const handleForceComplete = (reqId) => {
+                if(window.confirm('✅ ยืนยันการบังคับปิดใบงานนี้ให้เป็นสถานะ "เสร็จสิ้น"?')) {
+                    setRequests(requests.map(r => r.id === reqId ? {...r, status: 'completed'} : r));
+                    callAPI('updateRequestStatus', { reqId: reqId, status: 'completed' })
+                        .then(() => onRefresh());
+                }
+            };
+
             return (
                 <div className="space-y-6">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} /> จัดการรายการเรียกรถ</h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} /> จัดการรายการเรียกรถ</h3>
+                        {!isFormOpen && (
+                            <button onClick={() => setIsFormOpen(true)} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+                                <PlusCircle size={16}/> เพิ่มใบงาน
+                            </button>
+                        )}
+                    </div>
+
+                    {isFormOpen && (
+                        <Card className="bg-blue-50 border-blue-200">
+                            <h4 className="font-bold mb-4 text-blue-800">{editId ? '✏️ แก้ไขใบงาน' : '📝 สร้างใบงานใหม่ (Admin)'}</h4>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div><label className="text-sm font-medium">รับ</label><select required className="w-full p-2 border rounded" value={formData.pickup} onChange={e=>setFormData({...formData, pickup: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                    <div><label className="text-sm font-medium">ส่ง</label><select required className="w-full p-2 border rounded" value={formData.dropoff} onChange={e=>setFormData({...formData, dropoff: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
+                                    <div><label className="text-sm font-medium">วันที่</label><input required type="date" className="w-full p-2 border rounded" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
+                                    <div>
+                                        <label className="text-sm font-medium">จำนวนเที่ยว</label>
+                                        <input required type="number" min="1" max="10" className="w-full p-2 border rounded bg-white" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} disabled={editId !== null} title={editId ? "ไม่สามารถเปลี่ยนจำนวนเที่ยวขณะแก้ไขได้" : ""} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">หมายเหตุ</label>
+                                    <input type="text" className="w-full p-2 border rounded" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})} placeholder="ระบุหมายเหตุ (ถ้ามี)" />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button type="button" onClick={resetForm} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">ยกเลิก</button>
+                                    <button type="submit" disabled={isProcessing} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400">
+                                        {isProcessing ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                                    </button>
+                                </div>
+                            </form>
+                        </Card>
+                    )}
+
                     <div className="grid gap-4">
+                        {requests.length === 0 ? <p className="text-center text-slate-400 py-4">ไม่มีรายการคำขอ</p> : null}
                         {requests.map(req => (
                             <Card key={req.id}>
-                                <div className="flex justify-between">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                     <div>
                                         <div className="flex gap-2 items-center"><span className="text-xs bg-slate-100 px-2 rounded">#{req.id}</span> <StatusBadge status={req.status}/></div>
                                         <div className="font-bold mt-1 text-slate-700 flex items-center gap-1"><MapPin size={16} className="text-blue-500"/> {req.pickup} <span className="text-slate-400">→</span> <MapPin size={16} className="text-green-500"/> {req.dropoff}</div>
                                         <div className="text-sm text-slate-500 mt-2">ผู้ขอ: {req.requesterName} • วันที่: {req.date} {formatTimeHelper(req.createdAt, req.id)} น.</div>
-                                        {req.pallets > 0 && <div className="text-xs text-slate-600 mt-1 font-medium">จำนวน: {req.pallets} พาเลท</div>}
                                     </div>
-                                    <button onClick={() => {if(window.confirm('ลบ?')) setRequests(requests.filter(r=>r.id!==req.id))}} className="text-red-600 self-start p-2"><Trash2 size={18}/></button>
+                                    <div className="flex items-center gap-2 self-end md:self-auto border-t md:border-none pt-3 md:pt-0 w-full md:w-auto justify-end mt-2 md:mt-0">
+                                        {req.status !== 'completed' && (
+                                            <button onClick={() => handleForceComplete(req.id)} className="text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1.5 rounded font-medium border border-green-200">
+                                                ปิดงาน (Completed)
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleEdit(req)} className="text-slate-500 hover:text-blue-600 p-2 bg-slate-50 rounded"><Edit size={16}/></button>
+                                        <button onClick={() => handleDelete(req.id)} className="text-slate-500 hover:text-red-600 p-2 bg-slate-50 rounded"><Trash2 size={16}/></button>
+                                    </div>
                                 </div>
                             </Card>
                         ))}
@@ -670,7 +786,7 @@
             );
         };
 
-        const AdminDashboard = ({ requests, setRequests, users, setUsers, locations, setLocations }) => {
+        const AdminDashboard = ({ requests, setRequests, users, setUsers, locations, setLocations, onCreateRequest, onRefresh }) => {
             const [activeTab, setActiveTab] = useState('stats');
             const [filterType, setFilterType] = useState('all'); 
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -920,7 +1036,7 @@
                     )}
                     {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} />)}
                     {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
                 </div>
             );
         };
@@ -1125,7 +1241,7 @@
                     <main className="max-w-5xl mx-auto px-4 py-8">
                         {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
-                        {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} />)}
+                        {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(true)} />)}
                     </main>
                 </div>
             );
