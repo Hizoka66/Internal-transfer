@@ -136,8 +136,94 @@
         const Download = (p) => <SvgIcon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></SvgIcon>;
         const Briefcase = (p) => <SvgIcon {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></SvgIcon>;
         const Share = (p) => <SvgIcon {...p}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></SvgIcon>;
+        const TrendingUp = (p) => <SvgIcon {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></SvgIcon>;
 
-        // 💡 สูตรแปลงเวลาจาก ID เพื่อให้แสดงได้ตรงเป๊ะ (ดัก Error เวลากรณีไม่เข้าเงื่อนไข)
+        // 💡 ชุดสีสันสำหรับกราฟ (Color Palette)
+        const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316', '#6366f1', '#14b8a6'];
+
+        // 💡 คอมโพเนนต์สร้างกราฟ Pie & Donut แบบกำหนดเอง (เสถียร ไม่ต้องใช้ Library นอก)
+        const SvgPieChart = ({ data, colors, isDonut }) => {
+            const total = data.reduce((sum, d) => sum + d.value, 0);
+            if (total === 0) return <div className="text-slate-400 text-center h-full flex items-center justify-center">ไม่มีข้อมูลในช่วงเวลานี้</div>;
+
+            let cumulativePercent = 0;
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full w-full">
+                    <div className="relative w-48 h-48 mb-6">
+                        <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-full h-full drop-shadow-md" style={{ transform: 'rotate(-90deg)' }}>
+                            {data.map((slice, i) => {
+                                const startPercent = cumulativePercent;
+                                const slicePercent = slice.value / total;
+                                const endPercent = cumulativePercent + slicePercent;
+                                cumulativePercent = endPercent;
+
+                                // กรณีข้อมูลมีแค่หมวดหมู่เดียว (100%)
+                                if (slicePercent === 1) {
+                                    return (
+                                        <g key={i}>
+                                            <circle cx="0" cy="0" r="1" fill={colors[i % colors.length]} />
+                                            <text x="0" y="0" fill="#fff" fontSize="0.25" textAnchor="middle" dominantBaseline="central" fontWeight="bold" style={{ transform: 'rotate(90deg)' }}>
+                                                {isDonut ? `${Math.round(slicePercent * 100)}%` : slice.value}
+                                            </text>
+                                        </g>
+                                    );
+                                }
+
+                                const startX = Math.cos(2 * Math.PI * startPercent);
+                                const startY = Math.sin(2 * Math.PI * startPercent);
+                                const endX = Math.cos(2 * Math.PI * endPercent);
+                                const endY = Math.sin(2 * Math.PI * endPercent);
+                                const largeArcFlag = slicePercent > 0.5 ? 1 : 0;
+                                
+                                const pathData = [
+                                    `M ${startX} ${startY}`,
+                                    `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                                    `L 0 0`,
+                                ].join(' ');
+
+                                // ตำแหน่งสำหรับวาง Data Label
+                                const midPercent = startPercent + slicePercent / 2;
+                                const labelRadius = isDonut ? 0.75 : 0.6; 
+                                const labelX = Math.cos(2 * Math.PI * midPercent) * labelRadius;
+                                const labelY = Math.sin(2 * Math.PI * midPercent) * labelRadius;
+
+                                return (
+                                    <g key={i} className="transition-all hover:opacity-80 cursor-pointer">
+                                        <path d={pathData} fill={colors[i % colors.length]} stroke="white" strokeWidth="0.03" />
+                                        {/* ซ่อน Label ถ้าค่าน้อยกว่า 5% ป้องกันข้อความทับกัน */}
+                                        {slicePercent > 0.05 && (
+                                            <text x={labelX} y={labelY} fill="#fff" fontSize="0.2" textAnchor="middle" dominantBaseline="central" fontWeight="bold" style={{ transform: 'rotate(90deg)', transformOrigin: `${labelX}px ${labelY}px` }}>
+                                                {isDonut ? `${Math.round(slicePercent * 100)}%` : slice.value}
+                                            </text>
+                                        )}
+                                    </g>
+                                );
+                            })}
+                            
+                            {/* เจาะรูตรงกลางสำหรับกราฟ Donut */}
+                            {isDonut && <circle cx="0" cy="0" r="0.5" fill="white" />}
+                            {isDonut && (
+                                <text x="0" y="0" fill="#333" fontSize="0.25" textAnchor="middle" dominantBaseline="central" fontWeight="bold" style={{ transform: 'rotate(90deg)' }}>
+                                    {total}
+                                </text>
+                            )}
+                        </svg>
+                    </div>
+                    {/* คำอธิบาย (Legend) ด้านล่างกราฟ */}
+                    <div className="flex flex-wrap justify-center gap-2 text-xs w-full px-2">
+                        {data.map((d, i) => (
+                            <div key={i} className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+                                <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: colors[i % colors.length] }}></span>
+                                <span className="text-slate-700 font-medium">{d.name} <span className="text-slate-400">({d.value})</span></span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // 💡 สูตรแปลงเวลาจาก ID เพื่อให้แสดงได้ตรงเป๊ะ 
         const formatTimeHelper = (isoString, reqId) => {
             if (reqId && !isNaN(Number(reqId)) && Number(reqId) > 1600000000000) {
                 return new Date(Number(reqId)).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
@@ -650,7 +736,6 @@
             );
         };
 
-        // 💡 อัปเดตส่วน Admin ให้ จัดการใบงานได้แบบ Full Option (เพิ่ม/ลบ/แก้/ปิดจบ)
         const AdminRequestManagement = ({ requests, setRequests, locations, onCreateRequest, onRefresh }) => {
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editId, setEditId] = useState(null);
@@ -679,7 +764,7 @@
                     callAPI('editRequest', { reqData: updateData })
                         .then(res => {
                             if (res && res.success) {
-                                if (res.message) alert(res.message); // โชว์เตือนถ้าลดจำนวนเที่ยวไม่ได้
+                                if (res.message) alert(res.message); 
                                 else alert('บันทึกการแก้ไขเรียบร้อยแล้ว');
                                 onRefresh(); 
                             } else {
@@ -815,59 +900,35 @@
             const [endDate, setEndDate] = useState('');     
             const [selectedDriver, setSelectedDriver] = useState('all');
 
-            const filteredRequests = useMemo(() => {
-                return (requests||[]).filter(req => {
-                    if (!req) return false;
-                    const hasValidTrip = (req.trips || []).some(trip => {
-                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return false;
-                        const tDate = trip.date || req.date;
-                        if (filterType === 'daily') return tDate === selectedDate;
-                        if (filterType === 'monthly') return tDate && tDate.startsWith(selectedMonth);
-                        if (filterType === 'range') { 
-                            if (!startDate || !endDate) return true; 
-                            return tDate >= startDate && tDate <= endDate;
-                        }
-                        return true;
-                    });
-                    return hasValidTrip;
-                });
-            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
-
-            let totalTrips = 0, completedTrips = 0, pendingTrips = 0, activeTrips = 0;
-
-            filteredRequests.forEach(req => {
-                if (req && req.trips) {
-                    req.trips.forEach(trip => {
+            // 💡 1. ประมวลผล "เที่ยววิ่งที่ผ่านตัวกรองทั้งหมด" เพื่อใช้คำนวณกราฟทั้ง 4 ตัว
+            const validTripsList = useMemo(() => {
+                let trips = [];
+                (requests||[]).forEach(req => {
+                    (req.trips || []).forEach(trip => {
                         const tDate = trip.date || req.date;
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
                         if (filterType === 'daily' && tDate !== selectedDate) return;
                         if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
                         if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
                         
-                        totalTrips++;
-                        if (trip.status === 'finished') completedTrips++;
-                        else if (trip.status === 'ongoing') activeTrips++;
-                        else pendingTrips++;
-                    });
-                }
-            });
-
-            const globalDailyVolumeMap = useMemo(() => {
-                const map = {};
-                (requests||[]).forEach(req => {
-                    if (req && req.trips) {
-                        req.trips.forEach(trip => {
-                            if (trip.status === 'finished') {
-                                const tDate = trip.date || req.date;
-                                if (!map[tDate]) map[tDate] = 0;
-                                map[tDate] += 1;
-                            }
+                        trips.push({ 
+                            ...trip, 
+                            reqDate: tDate, 
+                            reqDropoff: req.dropoff, 
+                            requesterName: req.requesterName 
                         });
-                    }
+                    });
                 });
-                return map;
-            }, [requests]);
+                return trips;
+            }, [requests, selectedDriver, filterType, selectedDate, selectedMonth, startDate, endDate]);
 
+            // สถิติรวมด้านบน
+            let totalTrips = validTripsList.length;
+            let completedTrips = validTripsList.filter(t => t.status === 'finished').length;
+            let activeTrips = validTripsList.filter(t => t.status === 'ongoing').length;
+            let pendingTrips = validTripsList.filter(t => t.status === 'waiting').length;
+
+            // 💡 กราฟที่ 1: ข้อมูลกราฟแท่งรายวัน
             const dailyChartData = useMemo(() => {
                 let start, end;
                 const today = new Date();
@@ -898,56 +959,49 @@
                     }
                 }
 
-                filteredRequests.forEach(req => {
-                    if (req && req.trips) {
-                        req.trips.forEach(trip => {
-                            const tDate = trip.date || req.date;
-                            if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
-                            if (filterType === 'daily' && tDate !== selectedDate) return;
-                            if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
-                            if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
-
-                            if (trip.status === 'finished') {
-                                if (volumeMap.hasOwnProperty(tDate)) volumeMap[tDate] += 1;
-                            }
-                        });
+                validTripsList.forEach(t => {
+                    if (t.status === 'finished' && volumeMap.hasOwnProperty(t.reqDate)) {
+                        volumeMap[t.reqDate] += 1;
                     }
                 });
                 return dateArray.map(date => ({ date, count: volumeMap[date] }));
-            }, [filteredRequests, filterType, startDate, endDate, selectedMonth, selectedDate]);
+            }, [filterType, startDate, endDate, selectedMonth, selectedDate, validTripsList]);
 
-            const maxVolumeScale = useMemo(() => {
-                if (dailyChartData.length === 0) return 10;
-                const dates = dailyChartData.map(d => d.date);
-                const maxInPeriod = Math.max(...dates.map(date => globalDailyVolumeMap[date] || 0));
-                return maxInPeriod || 1;
-            }, [dailyChartData, globalDailyVolumeMap]);
+            const maxVolumeScale = Math.max(...dailyChartData.map(d => d.count), 1);
 
+            // 💡 กราฟที่ 2: ข้อมูลกราฟแท่งแยกตามจุดส่ง
             const locationVolume = useMemo(() => {
                 const locMap = {};
-                filteredRequests.forEach(req => {
-                    if (req && req.dropoff && req.trips) {
-                        req.trips.forEach(trip => {
-                            const tDate = trip.date || req.date;
-                            if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
-                            if (filterType === 'daily' && tDate !== selectedDate) return;
-                            if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
-                            if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
-
-                            if (trip.status === 'finished') {
-                                if (!locMap[req.dropoff]) locMap[req.dropoff] = 0;
-                                locMap[req.dropoff] += 1;
-                            }
-                        });
+                validTripsList.forEach(t => {
+                    if (t.status === 'finished') {
+                        if (!locMap[t.reqDropoff]) locMap[t.reqDropoff] = 0;
+                        locMap[t.reqDropoff] += 1;
                     }
                 });
                 return Object.keys(locMap).map(name => ({ name, count: locMap[name] })).sort((a,b) => b.count - a.count);
-            }, [filteredRequests, selectedDriver, filterType, selectedDate, selectedMonth, startDate, endDate]);
+            }, [validTripsList]);
 
             const maxVolumeLoc = Math.max(...locationVolume.map(d => d.count), 1);
 
+            // 💡 กราฟที่ 3: ข้อมูลผู้ร้องขอ (Pie Chart) 
+            const requesterData = useMemo(() => {
+                const reqMap = {};
+                validTripsList.forEach(t => {
+                    // นับงานทั้งหมดในระบบ ไม่ว่าสำเร็จหรือไม่
+                    if (!reqMap[t.requesterName]) reqMap[t.requesterName] = 0;
+                    reqMap[t.requesterName] += 1;
+                });
+                return Object.keys(reqMap).map(name => ({ name, value: reqMap[name] })).sort((a,b) => b.value - a.value);
+            }, [validTripsList]);
+
+            // 💡 กราฟที่ 4: ข้อมูลสำเร็จ vs ค้าง (Donut Chart)
+            const completionData = [
+                { name: 'สำเร็จ', value: completedTrips },
+                { name: 'ค้าง/กำลังทำ', value: pendingTrips + activeTrips }
+            ].filter(d => d.value > 0);
+
             const handleExport = () => {
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Pallets,Trips\n" + filteredRequests.map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.pallets || 0},${r.tripsNeeded}`).join("\n");
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Pallets,Trips\n" + (requests||[]).map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.pallets || 0},${r.tripsNeeded}`).join("\n");
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
@@ -957,16 +1011,7 @@
 
             const handleExportTrips = () => {
                 const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Trip ID,Date,Pickup,Dropoff,Driver,Start Time,End Time,Pallets\n" 
-                    + filteredRequests.flatMap(req => 
-                        (req.trips||[]).filter(t => {
-                                const tDate = t.date || req.date;
-                                if (selectedDriver !== 'all' && String(t.driverId) !== String(selectedDriver)) return false;
-                                if (filterType === 'daily' && tDate !== selectedDate) return false;
-                                if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return false;
-                                if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return false;
-                                return t.status === 'finished';
-                            }).map(t => `${t.id},${t.date || req.date},"${req.pickup}","${req.dropoff}","${t.driverName || ''}",${t.startTime || ''},${t.endTime || ''},${t.pallets || 0}`)
-                        ).join("\n");
+                    + validTripsList.map(t => `${t.id},${t.reqDate},"${t.pickup}","${t.reqDropoff}","${t.driverName || ''}",${t.startTime || ''},${t.endTime || ''},${t.pallets || 0}`).join("\n");
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
@@ -993,42 +1038,6 @@
                                 </div>
                             </div>
 
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <Card className="border-blue-100 bg-white">
-                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><BarChart2 size={20} className="text-blue-500" /> ปริมาณงานรายวัน (สำเร็จแล้ว)</h3>
-                                    <div className="h-64 flex items-end gap-2 overflow-x-auto pb-4 px-2 scrollbar-thin scrollbar-thumb-slate-200">
-                                        {dailyChartData.map((item, index) => {
-                                            const safeCount = item.count || 0;
-                                            const heightPercentage = Math.min(100, Math.max(0, (safeCount / maxVolumeScale) * 100));
-                                            const d = new Date(item.date);
-                                            const dateLabel = !isNaN(d.getTime()) ? `${d.getDate()}/${d.getMonth() + 1}` : item.date;
-                                            return (
-                                                <div key={index} className="flex-1 min-w-[30px] group flex flex-col items-center gap-1">
-                                                    <div className="relative w-full flex flex-col justify-end items-center h-full">
-                                                        <div className="absolute -top-8 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">{safeCount} เที่ยว</div>
-                                                        <div className="w-full bg-blue-500 rounded-t-sm hover:bg-blue-600 transition-all relative" style={{ height: `${heightPercentage}%`, minHeight: item.count > 0 ? '4px' : '0' }}></div>
-                                                    </div>
-                                                    <div className="text-[10px] text-slate-400 -rotate-90 origin-top-left mt-2 translate-y-4 whitespace-nowrap">{dateLabel}</div>
-                                                </div>
-                                            );
-                                        })}
-                                        {dailyChartData.length === 0 && <div className="w-full h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>}
-                                    </div>
-                                </Card>
-
-                                <Card className="border-blue-100 bg-white">
-                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><PieChart size={20} className="text-green-500" /> ปริมาณงานแยกตามจุดส่ง (สำเร็จแล้ว)</h3>
-                                    <div className="h-64 overflow-y-auto pr-2 space-y-3">
-                                        {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
-                                            <div key={index} className="group">
-                                                <div className="flex justify-between text-sm mb-1"><span className="text-slate-600 font-medium">{loc.name}</span><span className="text-slate-500">{loc.count} เที่ยว</span></div>
-                                                <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-green-500 h-full rounded-full group-hover:bg-green-600 transition-all duration-500" style={{ width: `${(loc.count / maxVolumeLoc) * 100}%` }}></div></div>
-                                            </div>
-                                        )) : (<div className="h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>)}
-                                    </div>
-                                </Card>
-                            </div>
-
                             <Card className="bg-slate-50 border-blue-100">
                                 <div className="flex flex-col md:flex-row gap-4 items-end">
                                     <div className="w-full md:w-auto">
@@ -1052,6 +1061,85 @@
                                     <div key={i} className={`${stat.bg} p-4 rounded-xl border border-slate-100 shadow-sm`}><div className="text-slate-500 text-xs uppercase tracking-wide font-semibold mb-1">{stat.label}</div><div className={`text-3xl font-bold ${stat.color}`}>{stat.val}</div></div>
                                 ))}
                             </div>
+
+                            {/* 🚀 ชุดกราฟใหม่ 4 ตัว 🚀 */}
+                            <div className="grid md:grid-cols-2 gap-6 mt-6">
+                                
+                                {/* 1. กราฟแท่งปริมาณงานรายวัน (สูงชัน) */}
+                                <Card className="border-blue-100 bg-white col-span-1 flex flex-col">
+                                    <h3 className="font-semibold text-slate-700 mb-2 flex items-center gap-2"><BarChart2 size={20} className="text-blue-500" /> 1. ปริมาณงานรายวัน (สำเร็จ)</h3>
+                                    
+                                    <div className="h-64 flex items-end gap-2 overflow-x-auto pb-4 px-2 pt-8 mt-2 scrollbar-thin scrollbar-thumb-slate-200">
+                                        {dailyChartData.map((item, index) => {
+                                            const safeCount = item.count || 0;
+                                            const heightPercentage = Math.min(100, Math.max(0, (safeCount / maxVolumeScale) * 100));
+                                            const d = new Date(item.date);
+                                            const dateLabel = !isNaN(d.getTime()) ? `${d.getDate()}/${d.getMonth() + 1}` : item.date;
+                                            
+                                            return (
+                                                <div key={index} className="flex-1 min-w-[35px] h-full flex flex-col items-center gap-1 group">
+                                                    <div className="w-full flex-1 relative flex flex-col justify-end items-center">
+                                                        {/* 💡 ย้าย Data Label เข้ามาไว้ในแท่งกราฟ พร้อมปรับสีและจัดตำแหน่งให้อยู่ด้านบน */}
+                                                        <div 
+                                                            className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-sm shadow-sm transition-all flex justify-center items-start pt-1.5" 
+                                                            style={{ height: `${heightPercentage}%`, minHeight: safeCount > 0 ? '28px' : '0' }}
+                                                        >
+                                                            {safeCount > 0 && (
+                                                                <span className="text-white font-bold text-xs drop-shadow-md">
+                                                                    {safeCount}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap h-4">{dateLabel}</div>
+                                                </div>
+                                            );
+                                        })}
+                                        {dailyChartData.length === 0 && <div className="w-full h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>}
+                                    </div>
+                                </Card>
+
+                                {/* 2. กราฟแท่งปริมาณงานแยกตามจุดส่ง (คนละสี) */}
+                                <Card className="border-blue-100 bg-white col-span-1">
+                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><MapPin size={20} className="text-rose-500" /> 2. ปริมาณงานแยกตามจุดส่ง (สำเร็จ)</h3>
+                                    <div className="h-64 overflow-y-auto pr-2 space-y-4">
+                                        {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
+                                            <div key={index} className="group">
+                                                <div className="flex justify-between text-sm mb-1">
+                                                    <span className="text-slate-700 font-medium">{loc.name}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-100 rounded-full h-6 overflow-hidden relative shadow-inner">
+                                                    <div 
+                                                        className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 text-white text-xs font-bold" 
+                                                        style={{ width: `${Math.max(5, (loc.count / maxVolumeLoc) * 100)}%`, backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                                                    >
+                                                        {loc.count > 0 && `${loc.count} เที่ยว`}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )) : (
+                                            <div className="h-full flex items-center justify-center text-slate-400">ไม่มีข้อมูลในช่วงเวลานี้</div>
+                                        )}
+                                    </div>
+                                </Card>
+
+                                {/* 3. กราฟวงกลม Requester (Pie Chart) นำกลับมาแล้ว! */}
+                                <Card className="border-blue-100 bg-white col-span-1">
+                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><PieChart size={20} className="text-purple-500" /> 3. สัดส่วนงานตามผู้ร้องขอ</h3>
+                                    <div className="h-64 pb-6">
+                                        <SvgPieChart data={requesterData} colors={CHART_COLORS} isDonut={false} />
+                                    </div>
+                                </Card>
+
+                                {/* 4. กราฟโดนัท สถานะงาน (Donut Chart) นำกลับมาแล้ว! */}
+                                <Card className="border-blue-100 bg-white col-span-1">
+                                    <h3 className="font-semibold text-slate-700 mb-6 flex items-center gap-2"><TrendingUp size={20} className="text-green-500" /> 4. สัดส่วนงานสำเร็จ vs ค้าง</h3>
+                                    <div className="h-64 pb-6">
+                                        <SvgPieChart data={completionData} colors={['#10b981', '#f59e0b']} isDonut={true} />
+                                    </div>
+                                </Card>
+
+                            </div>
                         </div>
                     )}
                     {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} />)}
@@ -1070,6 +1158,10 @@
             
             const [showInstallPage, setShowInstallPage] = useState(false);
             const isUpdating = useRef(false);
+            
+            // 💡 1. State และ Ref สำหรับระบบแจ้งเตือน
+            const [toastMsg, setToastMsg] = useState(null);
+            const prevRequestsRef = useRef([]);
 
             useEffect(() => {
                 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -1101,7 +1193,6 @@
                         if (data && !isUpdating.current) { 
                             if(data.users) setUsers(data.users);
                             if(data.requests) {
-                                // 💡 1. บังคับเรียงข้อมูลโดยใช้ ID (เวลาที่สร้าง) เสมอ ทำให้งานล่าสุดอยู่บนสุดตลอดกาล ไม่กระโดดลงไปข้างล่าง
                                 const sortedReqs = data.requests.sort((a, b) => Number(b.id) - Number(a.id));
                                 setRequests(sortedReqs);
                             }
@@ -1114,6 +1205,37 @@
                         if (showLoading) setLoading(false);
                     });
             };
+
+            // 💡 2. ระบบตรวจจับงานใหม่และแจ้งเตือนสำหรับคนขับ
+            useEffect(() => {
+                if (currentUser && currentUser.role === 'driver' && requests.length > 0) {
+                    const prevReqs = prevRequestsRef.current;
+                    
+                    // ตรวจสอบว่าโหลดข้อมูลครั้งแรกไปแล้ว และมีข้อมูลใหม่เพิ่มเข้ามา
+                    if (prevReqs.length > 0) {
+                        // หางานที่พึ่งโผล่มาใหม่ในรอบ 10 วินาทีนี้
+                        const newReqs = requests.filter(r => !prevReqs.find(pr => pr.id === r.id));
+                        // กรองเฉพาะงานที่ยังไม่มีคนรับ (pending)
+                        const newPending = newReqs.filter(r => r.status === 'pending');
+
+                        if (newPending.length > 0) {
+                            // แสดง Pop-up
+                            setToastMsg(`🚨 มีงานใหม่เข้า! รับที่: ${newPending[0].pickup}`);
+                            
+                            // เล่นเสียงแจ้งเตือนสั้นๆ
+                            try {
+                                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                                audio.play();
+                            } catch (e) { console.log('เบราว์เซอร์บล็อกการเล่นเสียงอัตโนมัติ'); }
+
+                            // ซ่อนแจ้งเตือนอัตโนมัติหลังผ่านไป 6 วินาที
+                            setTimeout(() => setToastMsg(null), 6000);
+                        }
+                    }
+                    // อัปเดตข้อมูลล่าสุดเก็บไว้เทียบในรอบถัดไป
+                    prevRequestsRef.current = requests;
+                }
+            }, [requests, currentUser]);
 
             const handleLogin = (user) => {
                 setCurrentUser(user);
@@ -1138,7 +1260,6 @@
                     status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
                 };
                 
-                // 💡 เรียงข้อมูลตอนสร้างใหม่ด้วย
                 const updatedRequests = [newReq, ...requests].sort((a, b) => Number(b.id) - Number(a.id));
                 setRequests(updatedRequests); 
                 
@@ -1155,7 +1276,6 @@
                 isUpdating.current = true;
                 
                 const timeString = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
-                // 💡 เซฟเวลาในเครื่องไว้สำรอง ป้องกันกรณีหาจาก DB ไม่เจอ
                 localStorage.setItem(`accepted_time_${tripId}`, timeString);
 
                 setRequests(requests.map(req => {
@@ -1242,7 +1362,24 @@
             if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} refreshData={() => fetchData(true)} />;
 
             return (
-                <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+                <div className="min-h-screen bg-slate-50 text-slate-900 font-sans relative">
+                    {/* 💡 3. UI ของกล่องแจ้งเตือน (Toast) */}
+                    {toastMsg && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-[90%] max-w-sm">
+                            <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl font-medium flex items-center justify-between gap-3 border border-blue-400">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white/20 p-2 rounded-full">
+                                        <Bell className="animate-bounce" size={20} />
+                                    </div>
+                                    <span className="text-sm leading-tight whitespace-pre-line">{toastMsg}</span>
+                                </div>
+                                <button onClick={() => setToastMsg(null)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
                         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-2">
