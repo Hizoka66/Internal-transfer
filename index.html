@@ -1355,7 +1355,7 @@
             const [toastMsg, setToastMsg] = useState(null);
             const prevRequestsRef = useRef([]);
 
-            // 💡 ขออนุญาตแจ้งเตือนเมื่อโหลดหน้าแรก
+            // 💡 ขออนุญาตแจ้งเตือนเมื่อโหลดหน้าแรก (ย้ายมาไว้ข้างนอกเพื่อให้ทำงานกับทุกคน)
             useEffect(() => {
                 if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
                     Notification.requestPermission();
@@ -1405,9 +1405,10 @@
                     });
             };
 
-            // 💡 ระบบตรวจจับและแจ้งเตือนคนขับ (อัปเดต Badge และ System Notification)
+            // 💡 ระบบตรวจจับและแจ้งเตือนทุกคนที่ติดตั้ง App (อัปเดต Badge และ System Notification)
             useEffect(() => {
-                if (currentUser && currentUser.role === 'driver' && requests.length > 0) {
+                // เปลี่ยนเงื่อนไขให้ตรวจสอบทุก roles ไม่เฉพาะ driver
+                if (currentUser && requests.length > 0) {
                     const prevReqs = prevRequestsRef.current;
                     
                     // คำนวณจำนวนงานที่ค้างอยู่ (Pending) ทั้งหมด
@@ -1435,8 +1436,10 @@
                         if (newPending.length > 0) {
                             const msg = `🚨 มีงานใหม่เข้า! รับที่: ${newPending[0].pickup}`;
                             
-                            // โชว์แบนเนอร์ในแอป
-                            setToastMsg(msg);
+                            // โชว์แบนเนอร์ในแอป (เฉพาะ driver หรือ admin เท่านั้นที่อาจจะสนใจ)
+                            if (currentUser.role === 'driver' || currentUser.role === 'admin') {
+                                setToastMsg(msg);
+                            }
                             
                             // 2. เด้งแจ้งเตือนระบบ (System Notification) นอกเบราว์เซอร์
                             if ('Notification' in window && Notification.permission === 'granted') {
@@ -1465,7 +1468,9 @@
                                 audio.play().catch(e => console.log('Auto-play blocked'));
                             } catch (e) { console.log('เบราว์เซอร์บล็อกการเล่นเสียงอัตโนมัติ'); }
 
-                            setTimeout(() => setToastMsg(null), 6000);
+                            if (currentUser.role === 'driver' || currentUser.role === 'admin') {
+                                setTimeout(() => setToastMsg(null), 6000);
+                            }
                         }
                     }
                     prevRequestsRef.current = requests;
@@ -1644,6 +1649,7 @@
                     <main className="max-w-5xl mx-auto px-4 py-8">
                         {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
+                        {/* 💡 ส่งฟังก์ชัน onRefresh ไปที่ AdminDashboard เพื่อให้รีเฟรชข้อมูลหลังบ้านใหม่หลังการแก้ไข */}
                         {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(true)} />)}
                     </main>
                 </div>
