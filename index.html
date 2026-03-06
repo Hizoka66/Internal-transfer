@@ -715,8 +715,20 @@
             };
 
             const handleForceComplete = (reqId) => {
-                if(window.confirm('✅ ยืนยันการบังคับปิดใบงานนี้ให้เป็นสถานะ "เสร็จสิ้น"?')) {
-                    setRequests(requests.map(r => r.id === reqId ? {...r, status: 'completed'} : r));
+                if(window.confirm('✅ ยืนยันการบังคับปิดใบงานนี้ให้เป็นสถานะ "เสร็จสิ้น"?\n(เที่ยวรถทั้งหมดที่ค้างอยู่จะถูกบันทึกว่าปิดงานโดย Admin)')) {
+                    setRequests(requests.map(r => {
+                        if (r.id === reqId) {
+                            const timeString = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                            const updatedTrips = r.trips.map(t => ({ 
+                                ...t, 
+                                status: 'finished', 
+                                driverName: 'Admin',
+                                endTime: t.endTime || timeString
+                            }));
+                            return { ...r, status: 'completed', trips: updatedTrips, tripsCompleted: r.tripsNeeded };
+                        }
+                        return r;
+                    }));
                     callAPI('updateRequestStatus', { reqId: reqId, status: 'completed' })
                         .then(() => onRefresh());
                 }
