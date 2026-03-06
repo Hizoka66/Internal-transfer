@@ -17,7 +17,7 @@
     <script>
         window.addEventListener('error', function(e) { console.error("Global Error:", e.message); });
         
-        // 💡 ลงทะเบียน Service Worker สำหรับ PWA (ดัก Error ให้แล้ว)
+        // 💡 ลงทะเบียน Service Worker สำหรับ PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 if (window.location.protocol.startsWith('http') && !window.location.href.includes('blob:')) {
@@ -628,9 +628,14 @@
             return (
                 <div className="space-y-6">
                     <QRScannerModal isOpen={showScanner} onClose={() => setShowScanner(false)} onScanSuccess={handleScanSuccess} expectedLocation={scanData.targetLocation} />
-                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full md:w-max">
+                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full md:w-max relative">
                         <button onClick={() => setActiveTab('my-jobs')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 ${activeTab==='my-jobs'?'bg-white shadow text-blue-600':'text-slate-600'}`}><Briefcase size={16}/> งานของฉัน</button>
-                        <button onClick={() => setActiveTab('pool')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 ${activeTab==='pool'?'bg-white shadow text-blue-600':'text-slate-600'}`}><Bell size={16}/> งานว่าง ({availableRequests.length})</button>
+                        <button onClick={() => setActiveTab('pool')} className={`px-4 py-2 rounded text-sm w-1/2 md:w-auto flex items-center justify-center gap-2 relative ${activeTab==='pool'?'bg-white shadow text-blue-600':'text-slate-600'}`}>
+                            <Bell size={16}/> งานว่าง 
+                            {availableRequests.length > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">{availableRequests.length}</span>
+                            )}
+                        </button>
                     </div>
                     
                     {activeTab === 'pool' && (
@@ -651,7 +656,7 @@
                                     <div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && (
                                         <div key={trip.id} className="flex justify-between items-center bg-slate-50 p-2 rounded text-sm border">
                                             เที่ยวที่ {i+1} 
-                                            <button onClick={() => onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">รับงานนี้</button>
+                                            <button onClick={() => onAcceptTrip(req.id, trip.id)} className="bg-slate-800 text-white px-3 py-1.5 rounded font-medium hover:bg-slate-700">รับงานนี้</button>
                                         </div>
                                     ))}</div>
                                 </Card>
@@ -691,7 +696,6 @@
             );
         };
 
-        // 💡 1. ฟังก์ชันจัดการผู้ใช้งาน (เรียก API แล้ว)
         const AdminUserManagement = ({ users, setUsers, onRefresh }) => {
             const [isEditing, setIsEditing] = useState(null);
             const [formData, setFormData] = useState({ name: '', username: '', password: '', role: 'requester' });
@@ -708,7 +712,7 @@
                 callAPI('saveUser', { userData })
                     .then(res => {
                         if(res && res.success) {
-                            onRefresh(); // รีเฟรชดึงข้อมูลใหม่หลังบันทึกสำเร็จ
+                            onRefresh(); 
                             resetForm();
                         } else {
                             alert('เกิดข้อผิดพลาดในการบันทึกผู้ใช้: ' + (res?.message || ''));
@@ -746,7 +750,6 @@
             );
         };
 
-        // 💡 2. ฟังก์ชันจัดการสถานที่ (เรียก API แล้ว)
         const AdminLocationManagement = ({ locations, setLocations, onRefresh }) => {
             const [isEditing, setIsEditing] = useState(null);
             const [name, setName] = useState('');
@@ -1005,7 +1008,6 @@
                 }
             });
 
-            // 💡 ข้อมูลกราฟแท่ง
             const chart1Data = useMemo(() => {
                 if (filterType === 'monthly') {
                     const year = selectedMonth.split('-')[0] || new Date().getFullYear().toString();
@@ -1131,7 +1133,7 @@
 
             return (
                 <div className="space-y-6">
-                    <div className="flex gap-2 overflow-x-auto pb-2 border-b">
+                    <div className="flex gap-2 overflow-x-auto pb-2 border-b scrollbar-hide">
                         <button onClick={() => setActiveTab('stats')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'stats' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><BarChart2 size={16} /> ภาพรวม</button>
                         <button onClick={() => setActiveTab('users')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'users' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><UsersIcon size={16} /> จัดการผู้ใช้งาน</button>
                         <button onClick={() => setActiveTab('locations')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'locations' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}><MapIcon size={16} /> จัดการสถานที่</button>
@@ -1322,8 +1324,16 @@
             const [showInstallPage, setShowInstallPage] = useState(false);
             const isUpdating = useRef(false);
             
+            // 💡 State สำหรับระบบแจ้งเตือน
             const [toastMsg, setToastMsg] = useState(null);
             const prevRequestsRef = useRef([]);
+
+            // 💡 ขออนุญาตแจ้งเตือนเมื่อโหลดหน้าแรก
+            useEffect(() => {
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission();
+                }
+            }, []);
 
             useEffect(() => {
                 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -1368,18 +1378,44 @@
                     });
             };
 
-            // 💡 ระบบตรวจจับและแจ้งเตือนคนขับ
+            // 💡 ระบบตรวจจับและแจ้งเตือนคนขับ (อัปเดต Badge และ System Notification)
             useEffect(() => {
                 if (currentUser && currentUser.role === 'driver' && requests.length > 0) {
                     const prevReqs = prevRequestsRef.current;
+                    
+                    // คำนวณจำนวนงานที่ค้างอยู่ (Pending) ทั้งหมด
+                    const pendingCount = requests.filter(r => r.status === 'pending').length;
+
+                    // 1. อัปเดตตัวเลขสีแดงบนไอคอนแอป (Badging API)
+                    if ('setAppBadge' in navigator) {
+                        if (pendingCount > 0) {
+                            navigator.setAppBadge(pendingCount).catch(console.error);
+                        } else {
+                            navigator.clearAppBadge().catch(console.error);
+                        }
+                    }
                     
                     if (prevReqs.length > 0) {
                         const newReqs = requests.filter(r => !prevReqs.find(pr => pr.id === r.id));
                         const newPending = newReqs.filter(r => r.status === 'pending');
 
                         if (newPending.length > 0) {
-                            setToastMsg(`🚨 มีงานใหม่เข้า! รับที่: ${newPending[0].pickup}`);
+                            const msg = `🚨 มีงานใหม่เข้า! รับที่: ${newPending[0].pickup}`;
                             
+                            // โชว์แบนเนอร์ในแอป
+                            setToastMsg(msg);
+                            
+                            // 2. เด้งแจ้งเตือนระบบ (System Notification) นอกเบราว์เซอร์
+                            if ('Notification' in window && Notification.permission === 'granted') {
+                                new Notification('TransportSys (งานใหม่)', {
+                                    body: msg,
+                                    icon: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
+                                    badge: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
+                                    tag: 'new-job'
+                                });
+                            }
+                            
+                            // เล่นเสียง
                             try {
                                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                                 audio.play();
@@ -1395,11 +1431,18 @@
             const handleLogin = (user) => {
                 setCurrentUser(user);
                 localStorage.setItem('transportSysUser', JSON.stringify(user));
+                
+                // ขออนุญาตแจ้งเตือนอีกครั้งตอนล็อกอินเผื่อพลาดยอมรับรอบแรก
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission();
+                }
             };
 
             const handleLogout = () => {
                 setCurrentUser(null);
                 localStorage.removeItem('transportSysUser');
+                // ล้างตัวเลขที่ไอคอนตอนล็อกเอาต์
+                if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(console.error);
             };
 
             const handleCreateRequest = (data) => {
@@ -1518,7 +1561,7 @@
 
             return (
                 <div className="min-h-screen bg-slate-50 text-slate-900 font-sans relative">
-                    {/* 💡 UI ของกล่องแจ้งเตือน (Toast) */}
+                    {/* 💡 UI ของกล่องแจ้งเตือนในแอป (Toast) */}
                     {toastMsg && (
                         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top-4 fade-in duration-300 w-[90%] max-w-sm">
                             <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl shadow-xl font-medium flex items-center justify-between gap-3 border border-blue-400">
@@ -1553,7 +1596,6 @@
                     <main className="max-w-5xl mx-auto px-4 py-8">
                         {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
-                        {/* 💡 ส่งฟังก์ชัน onRefresh ไปที่ AdminDashboard เพื่อให้รีเฟรชข้อมูลหลังบ้านใหม่หลังการแก้ไข */}
                         {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(true)} />)}
                     </main>
                 </div>
