@@ -655,7 +655,7 @@
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editId, setEditId] = useState(null);
             const [isProcessing, setIsProcessing] = useState(false);
-            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, note: '' });
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '' });
 
             const today = new Date().toISOString().split('T')[0];
 
@@ -666,7 +666,7 @@
             }, [locations, editId]);
 
             const resetForm = () => {
-                setFormData({ pickup: locations[0]?.name||'', dropoff: locations[1]?.name||'', date: '', tripsNeeded: 1, note: '' });
+                setFormData({ pickup: locations[0]?.name||'', dropoff: locations[1]?.name||'', date: '', tripsNeeded: 1, pallets: '', note: '' });
                 setIsFormOpen(false);
                 setEditId(null);
             };
@@ -679,7 +679,8 @@
                     callAPI('editRequest', { reqData: updateData })
                         .then(res => {
                             if (res && res.success) {
-                                alert('บันทึกการแก้ไขเรียบร้อยแล้ว');
+                                if (res.message) alert(res.message); // โชว์เตือนถ้าลดจำนวนเที่ยวไม่ได้
+                                else alert('บันทึกการแก้ไขเรียบร้อยแล้ว');
                                 onRefresh(); 
                             } else {
                                 alert('เกิดข้อผิดพลาดในการแก้ไข: ' + (res?.message || 'Unknown error'));
@@ -694,7 +695,7 @@
             };
 
             const handleEdit = (req) => {
-                setFormData({ pickup: req.pickup, dropoff: req.dropoff, date: req.date, tripsNeeded: req.tripsNeeded, note: req.note || '' });
+                setFormData({ pickup: req.pickup, dropoff: req.dropoff, date: req.date, tripsNeeded: req.tripsNeeded, pallets: req.pallets || '', note: req.note || '' });
                 setEditId(req.id);
                 setIsFormOpen(true);
             };
@@ -740,9 +741,16 @@
                                     <div><label className="text-sm font-medium">รับ</label><select required className="w-full p-2 border rounded" value={formData.pickup} onChange={e=>setFormData({...formData, pickup: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
                                     <div><label className="text-sm font-medium">ส่ง</label><select required className="w-full p-2 border rounded" value={formData.dropoff} onChange={e=>setFormData({...formData, dropoff: e.target.value})}>{locations.map(l=><option key={l.id}>{l.name}</option>)}</select></div>
                                     <div><label className="text-sm font-medium">วันที่</label><input required type="date" className="w-full p-2 border rounded" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} /></div>
-                                    <div>
-                                        <label className="text-sm font-medium">จำนวนเที่ยว</label>
-                                        <input required type="number" min="1" max="10" className="w-full p-2 border rounded bg-white" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} disabled={editId !== null} title={editId ? "ไม่สามารถเปลี่ยนจำนวนเที่ยวขณะแก้ไขได้" : ""} />
+                                    
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <label className="text-sm font-medium">จำนวนเที่ยว</label>
+                                            <input required type="number" min="1" max="10" className="w-full p-2 border rounded bg-white" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="text-sm font-medium">จำนวนพาเลท</label>
+                                            <input required type="number" min="0" className="w-full p-2 border rounded bg-white" value={formData.pallets} onChange={e=>setFormData({...formData, pallets: parseInt(e.target.value) || ''})} placeholder="ระบุจำนวน" />
+                                        </div>
                                     </div>
                                 </div>
                                 <div>
