@@ -900,6 +900,8 @@
 
             const [searchTerm, setSearchTerm] = useState('');
             const [statusFilter, setStatusFilter] = useState('all');
+            
+            // 💡 3. นำตัวเลือก All ออก แล้วตั้งค่าเริ่มต้นเป็น daily
             const [filterType, setFilterType] = useState('daily'); 
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -994,14 +996,12 @@
                         (req.pickup || '').toLowerCase().includes(term) || 
                         (req.dropoff || '').toLowerCase().includes(term);
 
+                    // 💡 กรองตามช่วงเวลา โดยไม่มี 'all' แล้ว
                     let mDate = true;
-                    if (filterType !== 'all') {
-                        const tDate = req.date;
-                        if (filterType === 'daily') mDate = tDate === selectedDate;
-                        else if (filterType === 'monthly') mDate = tDate && tDate.startsWith(selectedMonth);
-                        else if (filterType === 'range') {
-                            if (startDate && endDate) mDate = tDate >= startDate && tDate <= endDate;
-                        }
+                    if (filterType === 'daily') mDate = req.date === selectedDate;
+                    else if (filterType === 'monthly') mDate = req.date && req.date.startsWith(selectedMonth);
+                    else if (filterType === 'range') {
+                        if (startDate && endDate) mDate = req.date >= startDate && req.date <= endDate;
                     }
                     
                     return mStatus && mSearch && mDate;
@@ -1075,6 +1075,7 @@
                             <div className="w-full md:w-32">
                                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 block">ช่วงเวลา</label>
                                 <select className="w-full p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600" value={filterType} onChange={e => setFilterType(e.target.value)}>
+                                    {/* 💡 ตัด "ทั้งหมด" ออกตามคำขอ */}
                                     <option value="daily">รายวัน</option>
                                     <option value="monthly">รายเดือน</option>
                                     <option value="range">ช่วงเวลา</option>
@@ -1160,6 +1161,7 @@
 
             const driverUsers = users.filter(u => u.role === 'driver').map(u => u.name);
 
+            // 💡 1. ตัวคัดกรองหลัก (ใช้สำหรับภาพรวมยอดรวม)
             const filteredRequests = useMemo(() => {
                 return (requests||[]).filter(req => {
                     if (!req) return false;
@@ -1184,6 +1186,7 @@
                 if (req && req.trips) {
                     req.trips.forEach(trip => {
                         const tDate = trip.date || req.date;
+                        // 💡 เช็ค Filter ระดับเที่ยววิ่งซ้ำอีกรอบ
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
                         if (filterType === 'daily' && tDate !== selectedDate) return;
                         if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
@@ -1309,27 +1312,26 @@
                 return Object.keys(reqMap).map(name => ({ name, value: reqMap[name] })).sort((a,b) => b.value - a.value);
             }, [validTripsList]);
 
+            // 💡 2. ปรับสูตรคำนวณงานค้าง (Waiting) ให้กรองเวลา/คนขับ เหมือนกันเป๊ะกับกล่องด้านบน
             const waitingBarData = useMemo(() => {
                 const locMap = {};
-                (requests||[]).forEach(req => {
+                filteredRequests.forEach(req => {
                     (req.trips || []).forEach(trip => {
-                        if (trip.status === 'waiting' && !trip.driverId) {
-                            const tDate = trip.date || req.date;
-                            let passDate = false;
-                            if (filterType === 'all') passDate = true;
-                            else if (filterType === 'daily') passDate = tDate === selectedDate;
-                            else if (filterType === 'monthly') passDate = tDate && tDate.startsWith(selectedMonth);
-                            else if (filterType === 'range') passDate = (!startDate || !endDate) ? true : (tDate >= startDate && tDate <= endDate);
+                        const tDate = trip.date || req.date;
+                        // 💡 เช็ค Filter ระดับเที่ยววิ่ง เหมือนกับการนับ totalTrips
+                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+                        if (filterType === 'daily' && tDate !== selectedDate) return;
+                        if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
+                        if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
 
-                            if (passDate) {
-                                if (!locMap[req.pickup]) locMap[req.pickup] = 0;
-                                locMap[req.pickup] += 1;
-                            }
+                        if (trip.status === 'waiting') {
+                            if (!locMap[req.pickup]) locMap[req.pickup] = 0;
+                            locMap[req.pickup] += 1;
                         }
                     });
                 });
                 return Object.keys(locMap).map(name => ({ name, value: locMap[name] })).sort((a,b) => b.value - a.value);
-            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate]);
+            }, [filteredRequests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
 
             const maxWaitingBarScale = Math.max(...waitingBarData.map(d => d.value), 1);
 
@@ -1338,22 +1340,30 @@
                 { name: 'ค้าง/รอรับ', value: pendingTrips + activeTrips }
             ].filter(d => d.value > 0);
 
-            const handleExport = () => {
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "ID,Requester,Pickup,Dropoff,Status,Date,Pallets,Trips\n" + filteredRequests.map(r => `${r.id},${r.requesterName},${r.pickup},${r.dropoff},${r.status},${r.date},${r.pallets || 0},${r.tripsNeeded}`).join("\n");
+            // 💡 3. ปรับปุ่ม Export ให้โหลดข้อมูลดิบจากตาราง 100%
+            const handleExportRequests = () => {
+                // ดึงจาก state requests ดิบๆ โดยไม่ผ่าน Filter
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "id,requester_id,requester_name,pickup,dropoff,date,trips_needed,status,note,created_at\n" + 
+                    requests.map(r => `${r.id},${r.requesterId},${r.requesterName},"${r.pickup}","${r.dropoff}",${r.date},${r.tripsNeeded},${r.status},"${r.note || ''}",${r.createdAt}`).join("\n");
+                
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `transport_data_${filterType}.csv`);
+                link.setAttribute("download", `Raw_Requests_Data.csv`);
                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
             const handleExportTrips = () => {
-                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Trip ID,Date,Pickup,Dropoff,Driver,Start Time,End Time,Pallets\n" 
-                    + validTripsList.map(t => `${t.id},${t.reqDate},"${t.reqPickup}","${t.reqDropoff}","${t.driverName || ''}",${t.startTime || ''},${t.endTime || ''},${t.pallets || 0}`).join("\n");
+                // ดึงจาก state requests แล้วกระจาย (flatMap) ให้เป็นเที่ยววิ่งดิบๆ โดยไม่ผ่าน Filter
+                const allTrips = requests.flatMap(r => r.trips.map(t => ({...t, reqId: r.id, reqDate: r.date})));
+                
+                const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "id,request_id,status,start_time,end_time,driver_id,driver_name,date,pallets\n" + 
+                    allTrips.map(t => `${t.id},${t.reqId},${t.status},${t.startTime || ''},${t.endTime || ''},${t.driverId || ''},${t.driverName || ''},${t.date || t.reqDate || ''},${t.pallets || 0}`).join("\n");
+                
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `completed_trips_data.csv`);
+                link.setAttribute("download", `Raw_Trips_Data.csv`);
                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
@@ -1371,7 +1381,7 @@
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                 <h2 className="text-xl font-bold text-slate-800 dark:text-white">Admin Dashboard</h2>
                                 <div className="flex gap-2">
-                                    <button onClick={handleExport} className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"><FileText size={16} /> Export Requests</button>
+                                    <button onClick={handleExportRequests} className="flex items-center gap-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"><FileText size={16} /> Export Requests</button>
                                     <button onClick={handleExportTrips} className="flex items-center gap-2 text-sm bg-blue-600 border border-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 shadow-sm"><Download size={16} /> Export Trips CSV</button>
                                 </div>
                             </div>
@@ -1402,8 +1412,7 @@
                                 ))}
                             </div>
 
-                            {/* 💡 ปรับ Layout เป็น 2 คอลัมน์กว้าง สำหรับหน้าจอคอม เพื่อเอา Ongoing มาแทรกให้เต็มพื้นที่ */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 mt-6">
                                 
                                 {/* คู่ที่ 1 (แนวตั้ง): ปริมาณงานรายวัน + งานค้างรอรับ */}
                                 <Card className="border-blue-100 dark:border-slate-700 flex flex-col">
@@ -1561,8 +1570,8 @@
                                     </div>
                                 </Card>
 
-                                {/* 💡 สถานะรถกำลังวิ่ง (Ongoing) ย้ายมาเสียบในช่องว่างที่เหลือให้สวยงาม และจัดการความสูงให้พอดีกับกราฟอื่น */}
-                                <Card className="border-blue-100 dark:border-slate-700 md:col-span-2 flex flex-col">
+                                {/* 💡 สถานะรถกำลังวิ่ง (Ongoing) จัดวางให้พอดีกับช่องว่างด้านขวาล่างของหน้าจอ 4 คอลัมน์ */}
+                                <Card className="border-blue-100 dark:border-slate-700 col-span-1 md:col-span-2 xl:col-span-3 2xl:col-span-2 flex flex-col">
                                     <h3 className="font-semibold text-slate-700 dark:text-white mb-6 flex items-center gap-2"><Truck size={20} className="text-indigo-500" /> สถานะรถกำลังวิ่ง (Ongoing)</h3>
                                     <div className="h-64 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
                                         {activeDriversList.length > 0 ? activeDriversList.map((t, i) => (
@@ -1574,7 +1583,7 @@
                                                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1"><Clock size={12}/> เริ่มเดินทาง: {t.startTime} น.</div>
                                                     </div>
                                                 </div>
-                                                <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap">
+                                                <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap sm:justify-end">
                                                     <span className="px-2 py-1 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow-sm" style={{borderColor: getEntityColor(getNormalizedColorName(t.reqPickup)), color: getEntityColor(getNormalizedColorName(t.reqPickup))}}>{t.reqPickup}</span>
                                                     <Navigation size={14} className="text-slate-400" />
                                                     <span className="px-2 py-1 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow-sm" style={{borderColor: getEntityColor(getNormalizedColorName(t.reqDropoff)), color: getEntityColor(getNormalizedColorName(t.reqDropoff))}}>{t.reqDropoff}</span>
@@ -1711,6 +1720,7 @@
                                             icon: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
                                             badge: 'https://cdn-icons-png.flaticon.com/512/709/709790.png',
                                             vibrate: [200, 100, 200, 100, 200],
+                                            silent: false, // 💡 บังคับให้มือถือส่งเสียงแจ้งเตือน (ถ้าไม่ได้ปิดเสียงเครื่องไว้)
                                             tag: 'new-job-' + Date.now()
                                         });
                                     });
