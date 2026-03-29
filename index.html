@@ -1939,9 +1939,9 @@
                         </div>
                     )}
                     {/* 💡 เรียกใช้ onRefresh ผ่าน Props ที่ส่งต่อมาให้ถูกต้อง */}
-                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={() => fetchData(false)} />)}
-                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={() => fetchData(false)} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={onRefresh} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={onRefresh} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
                 </div>
             );
         }
