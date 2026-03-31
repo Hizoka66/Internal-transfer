@@ -1691,7 +1691,7 @@
                 ),
                 palletPerformance: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
-                        <WidgetHeader id="palletPerformance" title="สถิติพาเลท (จำนวนร้องขอ vs ส่งสำเร็จ)" icon={PieChart} colorClass="text-pink-500" />
+                        <WidgetHeader id="palletPerformance" title="ปริมาณพาเลท (จำนวนร้องขอ vs ส่งสำเร็จ)" icon={PieChart} colorClass="text-pink-500" />
                         {/* 💡 ปรับ pt-32 เป็น pt-6 เพื่อให้กราฟมีพื้นที่ยืดสูงขึ้นเช่นกัน */}
                         <div className="flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-6 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('palletPerformance', 300)}>
                             {palletPerformanceData.map((user, index) => {
