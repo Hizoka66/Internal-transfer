@@ -145,6 +145,7 @@
         const Moon = (p) => <SvgIcon {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></SvgIcon>;
         const GripHorizontal = (p) => <SvgIcon {...p}><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></SvgIcon>;
         const Maximize = (p) => <SvgIcon {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></SvgIcon>;
+        const MoveVertical = (p) => <SvgIcon {...p}><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="22"/></SvgIcon>;
 
         // 💡 ชุดสีสันสำหรับกราฟ (Color Palette) 30 สีไม่ซ้ำกัน
         const EXTENDED_PALETTE = [
@@ -348,8 +349,6 @@
                 </div>
             );
         }
-
-        // --- COMPONENTS ---
 
         function QRScannerModal({ isOpen, onClose, onScanSuccess, expectedLocation }) {
             const [error, setError] = useState('');
@@ -1190,7 +1189,6 @@
                 localStorage.setItem('adminActiveTab', activeTab);
             }, [activeTab]);
 
-            // 💡 1. ย้ายค่า defaultWidgets ออกจากตรงนี้ เพื่อไม่ให้เกิด Duplicate Declaration
             const [widgetOrder, setWidgetOrder] = useState(() => {
                 const defaultWidgets = ['dailyVolume', 'userPerformance', 'palletPerformance', 'waitingVolume', 'pickupLoc', 'dropoffLoc', 'reqPie', 'compPie', 'ongoingTrips'];
                 const savedOrder = localStorage.getItem('adminWidgetOrder');
@@ -1215,7 +1213,6 @@
                 localStorage.setItem('adminWidgetOrder', JSON.stringify(_widgetOrder));
             };
 
-            // 💡 3. ระบบย่อ/ขยายกล่อง Dashboard
             const [widgetSizes, setWidgetSizes] = useState(() => {
                 const saved = localStorage.getItem('adminWidgetSizes');
                 return saved ? JSON.parse(saved) : { ongoingTrips: 2, userPerformance: 2 };
@@ -1223,12 +1220,37 @@
 
             const toggleSize = (id) => {
                 setWidgetSizes(prev => {
-                    const current = prev[id] || (id === 'ongoingTrips' || id === 'userPerformance' ? 2 : 1);
+                    const current = prev[id] || (id === 'ongoingTrips' || id === 'userPerformance' || id === 'palletPerformance' ? 2 : 1);
                     const next = current >= 4 ? 1 : current + 1;
                     const updated = { ...prev, [id]: next };
                     localStorage.setItem('adminWidgetSizes', JSON.stringify(updated));
                     return updated;
                 });
+            };
+
+            // 💡 ระบบย่อ/ขยาย ความสูง (Height)
+            const [widgetHeights, setWidgetHeights] = useState(() => {
+                const saved = localStorage.getItem('adminWidgetHeights');
+                return saved ? JSON.parse(saved) : {};
+            });
+
+            const toggleHeight = (id) => {
+                setWidgetHeights(prev => {
+                    const current = prev[id] || 2; // 💡 เปลี่ยนค่าเริ่มต้นเป็นระดับ 2
+                    const next = current >= 3 ? 1 : current + 1; // ความสูงปรับได้ 3 ระดับ (1=เล็ก, 2=กลาง/ปกติ, 3=ใหญ่)
+                    const updated = { ...prev, [id]: next };
+                    localStorage.setItem('adminWidgetHeights', JSON.stringify(updated));
+                    return updated;
+                });
+            };
+
+            const getContainerStyle = (id, defaultHeight) => {
+                const h = widgetHeights[id] || 2; // 💡 ค่าเริ่มต้นคือระดับ 2 (ขนาดเดิม)
+                let height = defaultHeight;
+                if (h === 1) height = defaultHeight - 80; // ระดับ 1 ย่อให้เล็กลง 80px
+                if (h === 3) height = defaultHeight + 150; // ระดับ 3 ขยายให้ใหญ่ขึ้น 150px
+                
+                return { height: `${height}px`, transition: 'height 0.3s ease-in-out' }; // ใส่ transition ให้ยืด/หดได้นุ่มนวล
             };
 
             // แปลง Size ให้เป็น Class ของ Tailwind ที่สมบูรณ์
@@ -1347,7 +1369,6 @@
 
             const maxChart1Scale = Math.max(...chart1Data.data.map(d => d.total), 1) * 1.15;
 
-            // 💡 ข้อมูลสำหรับกราฟแท่งเปรียบเทียบผู้ร้องขอ (Requester) กับคนขับ (Driver)
             const userPerformanceData = useMemo(() => {
                 const stats = {};
                 (users || []).forEach(u => {
@@ -1363,7 +1384,6 @@
                     }
                     (req.trips || []).forEach(trip => {
                         if (trip.status === 'finished' && trip.driverId) {
-                            // ยอดวิ่งของ Driver
                             if (stats[trip.driverId]) {
                                 stats[trip.driverId].completed += 1;
                                 if (!stats[trip.driverId].completedDetails[reqName]) {
@@ -1371,7 +1391,6 @@
                                 }
                                 stats[trip.driverId].completedDetails[reqName] += 1;
                             }
-                            // ยอดส่งสำเร็จของ Requester (แยกตาม Driver ที่มาส่งให้)
                             if (stats[req.requesterId]) {
                                 stats[req.requesterId].completed += 1;
                                 const dName = trip.driverName || 'ไม่ระบุ';
@@ -1385,11 +1404,10 @@
                 });
 
                 return Object.values(stats)
-                    .filter(s => s.role === 'requester' && (s.requested > 0 || s.completed > 0)) // 💡 กรองเอาแค่ Requester
+                    .filter(s => s.role === 'requester' && (s.requested > 0 || s.completed > 0)) 
                     .sort((a,b) => Math.max(b.requested, b.completed) - Math.max(a.requested, a.completed));
             }, [filteredRequests, users]);
 
-            // 💡 ข้อมูลสำหรับกราฟแท่งเปรียบเทียบ จำนวนพาเลท
             const palletPerformanceData = useMemo(() => {
                 const stats = {};
                 (users || []).forEach(u => {
@@ -1525,25 +1543,28 @@
                 document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
-            // 💡 คอมโพเนนต์หัวข้อสำหรับกล่อง Dashboard ทุกอัน
             const WidgetHeader = ({ id, title, icon: Icon, colorClass }) => (
                 <div className="flex justify-between items-start mb-6">
                     <h3 className={`font-semibold text-slate-700 dark:text-white flex items-center gap-2 cursor-grab active:cursor-grabbing hover:${colorClass.replace('text-', 'text-opacity-80 text-')} transition-colors`}>
                         <GripHorizontal size={18} className="text-slate-300" />
                         <Icon size={20} className={colorClass} /> {title}
                     </h3>
-                    <button type="button" onClick={() => toggleSize(id)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-400 hover:text-blue-500 transition-colors" title="ปรับขนาดหน้าต่าง">
-                        <Maximize size={16} />
-                    </button>
+                    <div className="flex gap-1">
+                        <button type="button" onClick={() => toggleHeight(id)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-400 hover:text-blue-500 transition-colors" title="ปรับขนาดความสูง">
+                            <MoveVertical size={16} />
+                        </button>
+                        <button type="button" onClick={() => toggleSize(id)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-400 hover:text-blue-500 transition-colors" title="ปรับขนาดความกว้าง">
+                            <Maximize size={16} />
+                        </button>
+                    </div>
                 </div>
             );
 
-            // 💡 กำหนดโครงสร้างการ์ดกราฟต่างๆ (Widgets) สำหรับระบบ Drag & Drop
             const widgets = {
                 dailyVolume: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="dailyVolume" title="ปริมาณงานรายวัน (สำเร็จ)" icon={BarChart2} colorClass="text-blue-500" />
-                        <div className="h-64 flex items-end gap-6 overflow-x-auto pb-4 px-2 mt-2 scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="flex items-end gap-6 overflow-x-auto pb-4 px-2 mt-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('dailyVolume', 256)}>
                             {chart1Data.data.map((item, index) => {
                                 return (
                                     <div key={index} className="flex-1 min-w-[max-content] h-full flex flex-col items-center gap-2 group">
@@ -1607,11 +1628,10 @@
                         </div>
                     </Card>
                 ),
-                // 💡 กราฟแท่งเปรียบเทียบผู้ร้องขอ กับ คนขับ (แยกจำนวนตาม Requester ภายในแท่ง Driver)
                 userPerformance: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="userPerformance" title="สถิติผู้ใช้งาน (จำนวนเรียกรถ vs วิ่งงาน)" icon={UsersIcon} colorClass="text-purple-500" />
-                        <div className="h-80 flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-32 scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-32 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('userPerformance', 320)}>
                             {userPerformanceData.map((user, index) => {
                                 const maxVal = Math.max(...userPerformanceData.map(u => Math.max(u.requested, u.completed)), 1) * 1.15;
                                 const reqPct = Math.min(100, Math.max(0, (user.requested / maxVal) * 100));
@@ -1631,7 +1651,6 @@
 
                                 return (
                                     <div key={index} className="flex-1 min-w-[70px] flex flex-col items-center gap-2 group h-full relative z-10 hover:z-50">
-                                        {/* กล่อง Tooltip ปรับ z-[100] ให้ทับทุกอย่าง */}
                                         <div className="absolute bottom-[calc(100%+10px)] left-1/2 transform -translate-x-1/2 mb-2 bg-slate-800 dark:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-pre z-[100] pointer-events-none shadow-xl border border-slate-600 text-left w-max">
                                             {tooltipLines.join('\n')}
                                         </div>
@@ -1684,11 +1703,10 @@
                         </div>
                     </Card>
                 ),
-                // 💡 กราฟใหม่: สถิติพาเลท (จำนวนพาเลทที่ร้องขอ vs ที่ส่งสำเร็จ)
                 palletPerformance: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="palletPerformance" title="สถิติพาเลท (จำนวนร้องขอ vs ส่งสำเร็จ)" icon={PieChart} colorClass="text-pink-500" />
-                        <div className="h-80 flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-32 scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-32 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('palletPerformance', 320)}>
                             {palletPerformanceData.map((user, index) => {
                                 const maxVal = Math.max(...palletPerformanceData.map(u => Math.max(u.reqPallets, u.compPallets)), 1) * 1.15;
                                 const reqPct = Math.min(100, Math.max(0, (user.reqPallets / maxVal) * 100));
@@ -1763,7 +1781,7 @@
                 waitingVolume: (
                     <Card className="border-amber-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="waitingVolume" title="ปริมาณงานค้างรอรับ แยกตามจุดรับ" icon={Activity} colorClass="text-amber-500" />
-                        <div className="h-64 flex items-end justify-around gap-4 overflow-x-auto pb-4 px-2 pt-8 mt-2 scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="flex items-end justify-around gap-4 overflow-x-auto pb-4 px-2 pt-8 mt-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('waitingVolume', 256)}>
                             {waitingBarData.map((item, index) => {
                                 const hPct = Math.min(100, (item.value / maxWaitingBarScale) * 100);
                                 const color = getEntityColor(getNormalizedColorName(item.name));
@@ -1787,7 +1805,7 @@
                 pickupLoc: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="pickupLoc" title="แยกตามจุดรับ ต้นทาง (สำเร็จ)" icon={MapPin} colorClass="text-blue-500" />
-                        <div className="flex-1 relative min-h-[256px]">
+                        <div className="flex-1 relative" style={getContainerStyle('pickupLoc', 256)}>
                             <div className="absolute inset-0 flex flex-col justify-between py-3 z-0">
                                 {pickupVolume.length > 0 ? pickupVolume.map((loc, index) => (
                                     <div key={index} className="flex-1 w-full flex flex-col justify-center px-1">
@@ -1810,7 +1828,7 @@
                 dropoffLoc: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="dropoffLoc" title="แยกตามจุดส่ง ปลายทาง (สำเร็จ)" icon={MapPin} colorClass="text-rose-500" />
-                        <div className="flex-1 relative min-h-[256px]">
+                        <div className="flex-1 relative" style={getContainerStyle('dropoffLoc', 256)}>
                             <div className="absolute inset-0 flex flex-col justify-between py-3 z-0">
                                 {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
                                     <div key={index} className="flex-1 w-full flex flex-col justify-center px-1">
@@ -1833,7 +1851,7 @@
                 reqPie: (
                     <Card className="border-blue-100 dark:border-slate-700 h-full flex flex-col">
                         <WidgetHeader id="reqPie" title="สัดส่วนงานตามผู้ร้องขอ" icon={UsersIcon} colorClass="text-purple-500" />
-                        <div className="flex-1 pb-6 flex items-center">
+                        <div className="flex-1 pb-6 flex items-center justify-center" style={getContainerStyle('reqPie', 256)}>
                             <SvgPieChart data={requesterData} colors={requesterData.map(d => getEntityColor(getNormalizedColorName(d.name)))} isDonut={false} />
                         </div>
                     </Card>
@@ -1841,7 +1859,7 @@
                 compPie: (
                     <Card className="border-blue-100 dark:border-slate-700 h-full flex flex-col">
                         <WidgetHeader id="compPie" title="สัดส่วนงานสำเร็จ vs ค้าง (เทียบเป็น %)" icon={TrendingUp} colorClass="text-green-500" />
-                        <div className="flex-1 pb-6 flex items-center">
+                        <div className="flex-1 pb-6 flex items-center justify-center" style={getContainerStyle('compPie', 256)}>
                             <SvgPieChart data={completionData} colors={['#10b981', '#f59e0b']} isDonut={true} />
                         </div>
                     </Card>
@@ -1849,7 +1867,7 @@
                 ongoingTrips: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="ongoingTrips" title="สถานะรถกำลังวิ่ง (Ongoing)" icon={Truck} colorClass="text-indigo-500" />
-                        <div className="h-64 overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-slate-200">
+                        <div className="overflow-y-auto pr-2 space-y-3 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('ongoingTrips', 256)}>
                             {activeDriversList.length > 0 ? activeDriversList.map((t, i) => (
                                 <div key={i} className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/40">
                                     <div className="flex items-center gap-3">
@@ -1939,9 +1957,9 @@
                         </div>
                     )}
                     {/* 💡 เรียกใช้ onRefresh ผ่าน Props ที่ส่งต่อมาให้ถูกต้อง */}
-                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={onRefresh} />)}
-                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={onRefresh} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(false)} />)}
                 </div>
             );
         }
@@ -2144,12 +2162,16 @@
                         if (req.status === 'pending' && takenCount > 0) newStatus = 'assigned';
                         if (takenCount === req.tripsNeeded) newStatus = 'assigned';
                         
-                        callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name })
-                            .then(() => {
-                                if (newStatus !== req.status) {
-                                    return callAPI('updateRequestStatus', { reqId, status: newStatus });
-                                }
-                            })
+                        // Concurrent API requests
+                        const apiCalls = [
+                            callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name })
+                        ];
+                        
+                        if (newStatus !== req.status) {
+                            apiCalls.push(callAPI('updateRequestStatus', { reqId, status: newStatus }));
+                        }
+
+                        Promise.all(apiCalls)
                             .then(() => {
                                 isUpdating.current = false; 
                                 fetchData(false); 
@@ -2186,12 +2208,16 @@
                         if (completed >= Number(req.tripsNeeded)) reqStatus = 'completed';
                         else if (anyOngoing || completed > 0) reqStatus = 'in_progress';
                         
-                        callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
-                            .then(() => {
-                                if (reqStatus !== req.status) {
-                                    return callAPI('updateRequestStatus', { reqId, status: reqStatus });
-                                }
-                            })
+                        // Concurrent API requests
+                        const apiCalls = [
+                            callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
+                        ];
+
+                        if (reqStatus !== req.status) {
+                            apiCalls.push(callAPI('updateRequestStatus', { reqId, status: reqStatus }));
+                        }
+
+                        Promise.all(apiCalls)
                             .then(() => {
                                 isUpdating.current = false; 
                                 fetchData(false);
@@ -2238,7 +2264,8 @@
                     )}
 
                     <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm transition-colors duration-200">
-                        <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                        {/* 💡 ลบ max-w-[1600px] ออก และปล่อยให้เป็น w-full 100% เพื่อให้แสดงเต็มหน้าจอคอม */}
+                        <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="bg-blue-600 p-1.5 rounded-lg"><Truck className="text-white w-5 h-5" /></div>
                                 <span className="font-bold text-lg text-slate-800 dark:text-white hidden md:block">TransportSys</span>
@@ -2256,7 +2283,8 @@
                             </div>
                         </div>
                     </header>
-                    <main className="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {/* 💡 ลบ max-w-[1600px] ออกเช่นกันที่ส่วนเนื้อหา */}
+                    <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8">
                         {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
                         {currentUser.role === 'admin' && (<AdminDashboard requests={requests} setRequests={setRequests} users={users} setUsers={setUsers} locations={locations} setLocations={setLocations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(false)} />)}
