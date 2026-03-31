@@ -1777,46 +1777,42 @@
                 pickupLoc: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="pickupLoc" title="แยกตามจุดรับ ต้นทาง (สำเร็จ)" icon={MapPin} colorClass="text-blue-500" />
-                        <div className="flex-1 relative" style={getContainerStyle('pickupLoc', 256)}>
-                            <div className="absolute inset-0 flex flex-col justify-between py-3 z-0">
-                                {pickupVolume.length > 0 ? pickupVolume.map((loc, index) => (
-                                    <div key={index} className="flex-1 w-full flex flex-col justify-center px-1">
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-slate-700 dark:text-slate-300 font-medium">{loc.name}</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden relative shadow-inner">
-                                            <div className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 text-white text-[10px] font-bold" style={{ width: `${Math.max(5, (loc.count / maxVolumePickup) * 100)}%`, backgroundColor: getEntityColor(getNormalizedColorName(loc.name)) }}>
-                                                {loc.count > 0 && `${loc.count}`}
-                                            </div>
+                        <div className="overflow-y-auto pr-2 flex flex-col gap-4 py-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('pickupLoc', 256)}>
+                            {pickupVolume.length > 0 ? pickupVolume.map((loc, index) => (
+                                <div key={index} className="w-full flex flex-col justify-center px-1">
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-slate-700 dark:text-slate-300 font-medium">{loc.name}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden relative shadow-inner">
+                                        <div className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 text-white text-[10px] font-bold" style={{ width: `${Math.max(5, (loc.count / maxVolumePickup) * 100)}%`, backgroundColor: getEntityColor(getNormalizedColorName(loc.name)) }}>
+                                            {loc.count > 0 && `${loc.count}`}
                                         </div>
                                     </div>
-                                )) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500">ไม่มีข้อมูลในช่วงเวลานี้</div>
-                                )}
-                            </div>
+                                </div>
+                            )) : (
+                                <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500 min-h-[100px]">ไม่มีข้อมูลในช่วงเวลานี้</div>
+                            )}
                         </div>
                     </Card>
                 ),
                 dropoffLoc: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="dropoffLoc" title="แยกตามจุดส่ง ปลายทาง (สำเร็จ)" icon={MapPin} colorClass="text-rose-500" />
-                        <div className="flex-1 relative" style={getContainerStyle('dropoffLoc', 256)}>
-                            <div className="absolute inset-0 flex flex-col justify-between py-3 z-0">
-                                {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
-                                    <div key={index} className="flex-1 w-full flex flex-col justify-center px-1">
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-slate-700 dark:text-slate-300 font-medium">{loc.name}</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden relative shadow-inner">
-                                            <div className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 text-white text-[10px] font-bold" style={{ width: `${Math.max(5, (loc.count / maxVolumeLoc) * 100)}%`, backgroundColor: getEntityColor(getNormalizedColorName(loc.name)) }}>
-                                                {loc.count > 0 && `${loc.count}`}
-                                            </div>
+                        <div className="overflow-y-auto pr-2 flex flex-col gap-4 py-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('dropoffLoc', 256)}>
+                            {locationVolume.length > 0 ? locationVolume.map((loc, index) => (
+                                <div key={index} className="w-full flex flex-col justify-center px-1">
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-slate-700 dark:text-slate-300 font-medium">{loc.name}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden relative shadow-inner">
+                                        <div className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 text-white text-[10px] font-bold" style={{ width: `${Math.max(5, (loc.count / maxVolumeLoc) * 100)}%`, backgroundColor: getEntityColor(getNormalizedColorName(loc.name)) }}>
+                                            {loc.count > 0 && `${loc.count}`}
                                         </div>
                                     </div>
-                                )) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500">ไม่มีข้อมูลในช่วงเวลานี้</div>
-                                )}
-                            </div>
+                                </div>
+                            )) : (
+                                <div className="h-full flex items-center justify-center text-slate-400 dark:text-slate-500 min-h-[100px]">ไม่มีข้อมูลในช่วงเวลานี้</div>
+                            )}
                         </div>
                     </Card>
                 ),
