@@ -1185,6 +1185,18 @@
             const [endDate, setEndDate] = useState('');     
             const [selectedDriver, setSelectedDriver] = useState('all');
 
+            // 💡 ฟังก์ชันเช็คว่าวันที่ตรงกับที่ Filter หรือไม่
+            const isDateMatch = (dateStr) => {
+                if (!dateStr) return false;
+                if (filterType === 'daily') return dateStr === selectedDate;
+                if (filterType === 'monthly') return dateStr.startsWith(selectedMonth);
+                if (filterType === 'range') {
+                    if (!startDate || !endDate) return true;
+                    return dateStr >= startDate && dateStr <= endDate;
+                }
+                return true;
+            };
+
             useEffect(() => {
                 localStorage.setItem('adminActiveTab', activeTab);
             }, [activeTab]);
@@ -1215,7 +1227,7 @@
 
             const [widgetSizes, setWidgetSizes] = useState(() => {
                 const saved = localStorage.getItem('adminWidgetSizes');
-                return saved ? JSON.parse(saved) : { ongoingTrips: 2, userPerformance: 2 };
+                return saved ? JSON.parse(saved) : {};
             });
 
             const toggleSize = (id) => {
@@ -1228,7 +1240,6 @@
                 });
             };
 
-            // 💡 ระบบย่อ/ขยาย ความสูง (Height)
             const [widgetHeights, setWidgetHeights] = useState(() => {
                 const saved = localStorage.getItem('adminWidgetHeights');
                 return saved ? JSON.parse(saved) : {};
@@ -1236,8 +1247,8 @@
 
             const toggleHeight = (id) => {
                 setWidgetHeights(prev => {
-                    const current = prev[id] || 2; // 💡 เปลี่ยนค่าเริ่มต้นเป็นระดับ 2
-                    const next = current >= 3 ? 1 : current + 1; // ความสูงปรับได้ 3 ระดับ (1=เล็ก, 2=กลาง/ปกติ, 3=ใหญ่)
+                    const current = prev[id] || 2; 
+                    const next = current >= 3 ? 1 : current + 1; 
                     const updated = { ...prev, [id]: next };
                     localStorage.setItem('adminWidgetHeights', JSON.stringify(updated));
                     return updated;
@@ -1245,15 +1256,14 @@
             };
 
             const getContainerStyle = (id, defaultHeight) => {
-                const h = widgetHeights[id] || 2; // 💡 ค่าเริ่มต้นคือระดับ 2 (ขนาดเดิม)
+                const h = widgetHeights[id] || 2; 
                 let height = defaultHeight;
-                if (h === 1) height = defaultHeight - 80; // ระดับ 1 ย่อให้เล็กลง 80px
-                if (h === 3) height = defaultHeight + 150; // ระดับ 3 ขยายให้ใหญ่ขึ้น 150px
+                if (h === 1) height = defaultHeight - 80; 
+                if (h === 3) height = defaultHeight + 150; 
                 
-                return { height: `${height}px`, transition: 'height 0.3s ease-in-out' }; // ใส่ transition ให้ยืด/หดได้นุ่มนวล
+                return { height: `${height}px`, transition: 'height 0.3s ease-in-out' }; 
             };
 
-            // แปลง Size ให้เป็น Class ของ Tailwind ที่สมบูรณ์
             const getColSpanClass = (size) => {
                 switch(size) {
                     case 4: return 'col-span-1 md:col-span-2 xl:col-span-4';
@@ -1266,41 +1276,20 @@
 
             const driverUsers = (users || []).filter(u => u && u.role === 'driver').map(u => u.name);
 
-            const filteredRequests = useMemo(() => {
-                return (requests||[]).filter(req => {
-                    if (!req) return false;
-                    const hasValidTrip = (req.trips || []).some(trip => {
-                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return false;
-                        const tDate = trip.date || req.date;
-                        if (filterType === 'daily') return tDate === selectedDate;
-                        if (filterType === 'monthly') return tDate && tDate.startsWith(selectedMonth);
-                        if (filterType === 'range') { 
-                            if (!startDate || !endDate) return true; 
-                            return tDate >= startDate && tDate <= endDate;
-                        }
-                        return true;
-                    });
-                    return hasValidTrip;
+            // 💡 อัปเดตสถิติรวมด้านบนให้นับจาก "เที่ยวรถ (Trips)"
+            let totalTripsCount = 0, completedTripsCount = 0, pendingTripsCount = 0, activeTripsCount = 0;
+
+            (requests || []).forEach(req => {
+                (req.trips || []).forEach(trip => {
+                    const tDate = trip.date || req.date;
+                    if (!isDateMatch(tDate)) return;
+                    if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+                    
+                    totalTripsCount++;
+                    if (trip.status === 'finished') completedTripsCount++;
+                    else if (trip.status === 'ongoing') activeTripsCount++;
+                    else pendingTripsCount++;
                 });
-            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
-
-            let totalTrips = 0, completedTrips = 0, pendingTrips = 0, activeTrips = 0;
-
-            filteredRequests.forEach(req => {
-                if (req && req.trips) {
-                    req.trips.forEach(trip => {
-                        const tDate = trip.date || req.date;
-                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
-                        if (filterType === 'daily' && tDate !== selectedDate) return;
-                        if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
-                        if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
-                        
-                        totalTrips++;
-                        if (trip.status === 'finished') completedTrips++;
-                        else if (trip.status === 'ongoing') activeTrips++;
-                        else pendingTrips++;
-                    });
-                }
             });
 
             const chart1Data = useMemo(() => {
@@ -1369,6 +1358,7 @@
 
             const maxChart1Scale = Math.max(...chart1Data.data.map(d => d.total), 1) * 1.15;
 
+            // 💡 กราฟผู้ใช้งาน: อัปเดตให้บวกยอด "requested" เฉพาะเที่ยวที่ตรง Filter ทำให้เลขเท่ากับ Total เป๊ะ
             const userPerformanceData = useMemo(() => {
                 const stats = {};
                 (users || []).forEach(u => {
@@ -1377,26 +1367,29 @@
                     }
                 });
 
-                filteredRequests.forEach(req => {
+                (requests || []).forEach(req => {
                     const reqName = req.requesterName || 'ไม่ระบุ';
-                    if (stats[req.requesterId]) {
-                        stats[req.requesterId].requested += Number(req.tripsNeeded || 0);
-                    }
+                    
                     (req.trips || []).forEach(trip => {
+                        const tDate = trip.date || req.date;
+                        if (!isDateMatch(tDate)) return;
+                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+
+                        // 💡 นับยอดเรียกรถจากจำนวนเที่ยว (Trips) ที่ผ่านเงื่อนไข Filter เพื่อให้ตรงกับกล่อง Total ด้านบนเป๊ะๆ
+                        if (stats[req.requesterId]) {
+                            stats[req.requesterId].requested += 1;
+                        }
+
                         if (trip.status === 'finished' && trip.driverId) {
                             if (stats[trip.driverId]) {
                                 stats[trip.driverId].completed += 1;
-                                if (!stats[trip.driverId].completedDetails[reqName]) {
-                                    stats[trip.driverId].completedDetails[reqName] = 0;
-                                }
+                                if (!stats[trip.driverId].completedDetails[reqName]) stats[trip.driverId].completedDetails[reqName] = 0;
                                 stats[trip.driverId].completedDetails[reqName] += 1;
                             }
                             if (stats[req.requesterId]) {
                                 stats[req.requesterId].completed += 1;
                                 const dName = trip.driverName || 'ไม่ระบุ';
-                                if (!stats[req.requesterId].completedByDriver[dName]) {
-                                    stats[req.requesterId].completedByDriver[dName] = 0;
-                                }
+                                if (!stats[req.requesterId].completedByDriver[dName]) stats[req.requesterId].completedByDriver[dName] = 0;
                                 stats[req.requesterId].completedByDriver[dName] += 1;
                             }
                         }
@@ -1406,7 +1399,7 @@
                 return Object.values(stats)
                     .filter(s => s.role === 'requester' && (s.requested > 0 || s.completed > 0)) 
                     .sort((a,b) => Math.max(b.requested, b.completed) - Math.max(a.requested, a.completed));
-            }, [filteredRequests, users]);
+            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver, users]);
 
             const palletPerformanceData = useMemo(() => {
                 const stats = {};
@@ -1416,27 +1409,33 @@
                     }
                 });
 
-                filteredRequests.forEach(req => {
+                const addedReqPallets = new Set(); 
+
+                (requests || []).forEach(req => {
                     const reqName = req.requesterName || 'ไม่ระบุ';
-                    if (stats[req.requesterId]) {
-                        stats[req.requesterId].reqPallets += Number(req.pallets || 0);
-                    }
+
                     (req.trips || []).forEach(trip => {
+                        const tDate = trip.date || req.date;
+                        if (!isDateMatch(tDate)) return;
+                        if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
+
+                        // 💡 บวกรวมยอดพาเลทที่ร้องขอ (บวกแค่ครั้งเดียวต่อ 1 คำขอ ที่มีเที่ยววิ่งผ่านเงื่อนไข Filter)
+                        if (stats[req.requesterId] && !addedReqPallets.has(req.id)) {
+                            stats[req.requesterId].reqPallets += Number(req.pallets || 0);
+                            addedReqPallets.add(req.id);
+                        }
+
                         if (trip.status === 'finished' && trip.driverId) {
                             const palletsDeliv = Number(trip.pallets || 0);
                             if (stats[trip.driverId]) {
                                 stats[trip.driverId].compPallets += palletsDeliv;
-                                if (!stats[trip.driverId].compDetails[reqName]) {
-                                    stats[trip.driverId].compDetails[reqName] = 0;
-                                }
+                                if (!stats[trip.driverId].compDetails[reqName]) stats[trip.driverId].compDetails[reqName] = 0;
                                 stats[trip.driverId].compDetails[reqName] += palletsDeliv;
                             }
                             if (stats[req.requesterId]) {
                                 stats[req.requesterId].compPallets += palletsDeliv;
                                 const dName = trip.driverName || 'ไม่ระบุ';
-                                if (!stats[req.requesterId].compByDriver[dName]) {
-                                    stats[req.requesterId].compByDriver[dName] = 0;
-                                }
+                                if (!stats[req.requesterId].compByDriver[dName]) stats[req.requesterId].compByDriver[dName] = 0;
                                 stats[req.requesterId].compByDriver[dName] += palletsDeliv;
                             }
                         }
@@ -1446,18 +1445,21 @@
                 return Object.values(stats)
                     .filter(s => s.role === 'requester' && (s.reqPallets > 0 || s.compPallets > 0))
                     .sort((a,b) => Math.max(b.reqPallets, b.compPallets) - Math.max(a.reqPallets, a.compPallets));
-            }, [filteredRequests, users]);
+            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver, users]);
 
             const validTripsList = useMemo(() => {
                 let trips = [];
-                filteredRequests.forEach(req => {
+                (requests || []).forEach(req => {
                     (req.trips || []).forEach(trip => {
+                        const tDate = trip.date || req.date;
+                        if (!isDateMatch(tDate)) return;
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
-                        trips.push({ ...trip, reqDate: trip.date || req.date, reqPickup: req.pickup, reqDropoff: req.dropoff, requesterName: req.requesterName });
+                        
+                        trips.push({ ...trip, reqDate: tDate, reqPickup: req.pickup, reqDropoff: req.dropoff, requesterName: req.requesterName });
                     });
                 });
                 return trips;
-            }, [filteredRequests, selectedDriver]);
+            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
 
             const activeDriversList = validTripsList.filter(t => t.status === 'ongoing');
 
@@ -1496,13 +1498,11 @@
 
             const waitingBarData = useMemo(() => {
                 const locMap = {};
-                filteredRequests.forEach(req => {
+                (requests || []).forEach(req => {
                     (req.trips || []).forEach(trip => {
                         const tDate = trip.date || req.date;
+                        if (!isDateMatch(tDate)) return;
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
-                        if (filterType === 'daily' && tDate !== selectedDate) return;
-                        if (filterType === 'monthly' && (!tDate || !tDate.startsWith(selectedMonth))) return;
-                        if (filterType === 'range' && startDate && endDate && (tDate < startDate || tDate > endDate)) return;
 
                         if (trip.status === 'waiting') {
                             if (!locMap[req.pickup]) locMap[req.pickup] = { value: 0 };
@@ -1511,13 +1511,13 @@
                     });
                 });
                 return Object.keys(locMap).map(name => ({ name, value: locMap[name].value })).sort((a,b) => b.value - a.value);
-            }, [filteredRequests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
+            }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
 
             const maxWaitingBarScale = Math.max(...waitingBarData.map(d => d.value), 1) * 1.15;
 
             const completionData = [
-                { name: 'สำเร็จ', value: completedTrips },
-                { name: 'ค้าง/รอรับ', value: pendingTrips + activeTrips }
+                { name: 'สำเร็จ', value: completedTripsCount },
+                { name: 'ค้าง/รอรับ', value: pendingTripsCount + activeTripsCount }
             ].filter(d => d.value > 0);
 
             const handleExportRequests = () => {
@@ -1631,7 +1631,6 @@
                 userPerformance: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="userPerformance" title="สถิติผู้ใช้งาน (จำนวนเรียกรถ vs วิ่งงาน)" icon={UsersIcon} colorClass="text-purple-500" />
-                        {/* 💡 ปรับ pt-32 เป็น pt-6 เพื่อให้กราฟมีพื้นที่ยืดสูงขึ้น */}
                         <div className="flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-6 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('userPerformance', 300)}>
                             {userPerformanceData.map((user, index) => {
                                 const maxVal = Math.max(...userPerformanceData.map(u => Math.max(u.requested, u.completed)), 1) * 1.15;
@@ -1650,7 +1649,7 @@
                                             </div>
                                             <div className="w-6 sm:w-8 relative flex flex-col justify-end items-center h-full">
                                                 <div className="w-full shadow-sm transition-all flex flex-col-reverse rounded-t-sm overflow-hidden relative" style={{ height: `${compPct}%`, minHeight: user.completed > 0 ? '24px' : '0' }}>
-                                                    {Object.entries(user.completedByDriver).map(([dName, count], idx) => {
+                                                    {Object.entries(user.completedByDriver || {}).map(([dName, count], idx) => {
                                                         const segHeight = (count / user.completed) * 100;
                                                         return (
                                                             <div 
@@ -1679,7 +1678,7 @@
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {Array.from(new Set(userPerformanceData.flatMap(u => Object.keys(u.completedByDriver)))).map(dName => (
+                                {Array.from(new Set(userPerformanceData.reduce((acc, u) => acc.concat(Object.keys(u.completedByDriver || {})), []))).map(dName => (
                                     <div key={dName} className="flex items-center gap-1.5 text-[10px] font-medium bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 shadow-sm">
                                         <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: getEntityColor(dName) }}></div>
                                         <span className="text-slate-600 dark:text-slate-300">{dName}</span>
@@ -1691,8 +1690,7 @@
                 ),
                 palletPerformance: (
                     <Card className="border-blue-100 dark:border-slate-700 flex flex-col h-full">
-                        <WidgetHeader id="palletPerformance" title="ปริมาณพาเลท (จำนวนร้องขอ vs ส่งสำเร็จ)" icon={PieChart} colorClass="text-pink-500" />
-                        {/* 💡 ปรับ pt-32 เป็น pt-6 เพื่อให้กราฟมีพื้นที่ยืดสูงขึ้นเช่นกัน */}
+                        <WidgetHeader id="palletPerformance" title="สถิติพาเลท (จำนวนร้องขอ vs ส่งสำเร็จ)" icon={PieChart} colorClass="text-pink-500" />
                         <div className="flex items-end gap-4 overflow-x-auto pb-4 px-2 mt-2 pt-6 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('palletPerformance', 300)}>
                             {palletPerformanceData.map((user, index) => {
                                 const maxVal = Math.max(...palletPerformanceData.map(u => Math.max(u.reqPallets, u.compPallets)), 1) * 1.15;
@@ -1711,7 +1709,7 @@
                                             </div>
                                             <div className="w-6 sm:w-8 relative flex flex-col justify-end items-center h-full">
                                                 <div className="w-full shadow-sm transition-all flex flex-col-reverse rounded-t-sm overflow-hidden relative" style={{ height: `${compPct}%`, minHeight: user.compPallets > 0 ? '24px' : '0' }}>
-                                                    {Object.entries(user.compByDriver).map(([dName, count], idx) => {
+                                                    {Object.entries(user.compByDriver || {}).map(([dName, count], idx) => {
                                                         const segHeight = (count / user.compPallets) * 100;
                                                         return (
                                                             <div 
@@ -1740,7 +1738,7 @@
                                 </div>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {Array.from(new Set(palletPerformanceData.flatMap(u => Object.keys(u.compByDriver)))).map(dName => (
+                                {Array.from(new Set(palletPerformanceData.reduce((acc, u) => acc.concat(Object.keys(u.compByDriver || {})), []))).map(dName => (
                                     <div key={dName} className="flex items-center gap-1.5 text-[10px] font-medium bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 shadow-sm">
                                         <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: getEntityColor(dName) }}></div>
                                         <span className="text-slate-600 dark:text-slate-300">{dName}</span>
@@ -1899,7 +1897,7 @@
                             </Card>
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {[{ label: 'Total (Trips)', val: totalTrips, color: 'text-slate-800 dark:text-white', bg: 'bg-white dark:bg-slate-800' }, { label: 'Finished', val: completedTrips, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' }, { label: 'Ongoing', val: activeTrips, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' }, { label: 'Waiting', val: pendingTrips, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' }].map((stat, i) => (
+                                {[{ label: 'Total (Trips)', val: totalTripsCount, color: 'text-slate-800 dark:text-white', bg: 'bg-white dark:bg-slate-800' }, { label: 'Finished', val: completedTripsCount, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' }, { label: 'Ongoing', val: activeTripsCount, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' }, { label: 'Waiting', val: pendingTripsCount, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' }].map((stat, i) => (
                                     <div key={i} className={`${stat.bg} p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm`}><div className="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide font-semibold mb-1">{stat.label}</div><div className={`text-3xl font-bold ${stat.color}`}>{stat.val}</div></div>
                                 ))}
                             </div>
@@ -1924,10 +1922,9 @@
                             </div>
                         </div>
                     )}
-                    {/* 💡 เรียกใช้ onRefresh และ onCreateRequest ผ่าน Props ที่ส่งต่อมาให้ถูกต้อง */}
-                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={onRefresh} />)}
-                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={onRefresh} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(false)} />)}
                 </div>
             );
         }
@@ -2130,7 +2127,6 @@
                         if (req.status === 'pending' && takenCount > 0) newStatus = 'assigned';
                         if (takenCount === req.tripsNeeded) newStatus = 'assigned';
                         
-                        // Concurrent API requests
                         const apiCalls = [
                             callAPI('updateTripStatus', { tripId, status: 'waiting', driverId: currentUser.id, driverName: currentUser.name })
                         ];
@@ -2176,7 +2172,6 @@
                         if (completed >= Number(req.tripsNeeded)) reqStatus = 'completed';
                         else if (anyOngoing || completed > 0) reqStatus = 'in_progress';
                         
-                        // Concurrent API requests
                         const apiCalls = [
                             callAPI('updateTripStatus', { tripId, status: action === 'start' ? 'ongoing' : 'finished', driverId: currentUser.id, driverName: currentUser.name, pallets: Number(pallets) })
                         ];
@@ -2232,7 +2227,6 @@
                     )}
 
                     <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm transition-colors duration-200">
-                        {/* 💡 ลบ max-w-[1600px] ออก และปล่อยให้เป็น w-full 100% เพื่อให้แสดงเต็มหน้าจอคอม */}
                         <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="bg-blue-600 p-1.5 rounded-lg"><Truck className="text-white w-5 h-5" /></div>
@@ -2251,7 +2245,6 @@
                             </div>
                         </div>
                     </header>
-                    {/* 💡 ลบ max-w-[1600px] ออกเช่นกันที่ส่วนเนื้อหา */}
                     <main className="w-full mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-8">
                         {currentUser.role === 'requester' && (<RequesterDashboard requests={requests} onCreateRequest={handleCreateRequest} currentUserId={currentUser.id} currentUser={currentUser} locations={locations} />)}
                         {currentUser.role === 'driver' && (<DriverDashboard requests={requests} currentUser={currentUser} onAcceptTrip={handleAcceptTrip} onUpdateTripStatus={handleUpdateTripStatus} />)}
