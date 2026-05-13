@@ -1997,9 +1997,9 @@
                             </div>
                         </div>
                     )}
-                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={() => fetchData(false)} />)}
-                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={() => fetchData(false)} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={onRefresh} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={onRefresh} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
                 </div>
             );
         }
