@@ -146,6 +146,7 @@
         const GripHorizontal = (p) => <SvgIcon {...p}><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></SvgIcon>;
         const Maximize = (p) => <SvgIcon {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></SvgIcon>;
         const MoveVertical = (p) => <SvgIcon {...p}><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="22"/></SvgIcon>;
+        const Zap = (p) => <SvgIcon {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></SvgIcon>;
 
         // 💡 ชุดสีสันสำหรับกราฟ (Color Palette) 30 สีไม่ซ้ำกัน
         const EXTENDED_PALETTE = [
@@ -598,7 +599,7 @@
 
         function RequesterDashboard({ requests, onCreateRequest, currentUserId, currentUser, locations }) {
             const [showForm, setShowForm] = useState(false);
-            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '' });
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '', isUrgent: false });
 
             useEffect(() => {
                 if (locations.length > 0 && !formData.pickup) {
@@ -610,12 +611,16 @@
                 e.preventDefault(); 
                 onCreateRequest(formData); 
                 setShowForm(false); 
-                setFormData({ ...formData, note: '', pallets: '' }); 
+                setFormData({ ...formData, note: '', pallets: '', isUrgent: false }); 
             };
             
             const myRequests = (requests || []).filter(r => 
                 r && (String(r.requesterId) === String(currentUserId) || String(r.requesterName) === String(currentUser.name)) && r.status !== 'completed'
-            );
+            ).sort((a,b) => {
+                if (a.isUrgent && !b.isUrgent) return -1;
+                if (!a.isUrgent && b.isUrgent) return 1;
+                return Number(b.id) - Number(a.id);
+            });
             
             const today = new Date().toISOString().split('T')[0];
 
@@ -633,6 +638,13 @@
                                     <div className="flex-1"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">จำนวนเที่ยว</label><input required type="number" min="1" max="10" className="w-full p-2 border rounded-lg outline-none mt-1 bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600" value={formData.tripsNeeded} onChange={e=>setFormData({...formData, tripsNeeded: parseInt(e.target.value)})} /></div>
                                     <div className="flex-1"><label className="text-sm font-medium text-slate-600 dark:text-slate-300">จำนวนพาเลท (รวม)</label><input required type="number" min="1" className="w-full p-2 border rounded-lg outline-none mt-1 bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600" value={formData.pallets} onChange={e=>setFormData({...formData, pallets: parseInt(e.target.value) || ''})} placeholder="ระบุจำนวน" /></div>
                                 </div>
+
+                                <div className="col-span-1 md:col-span-2 mt-2">
+                                    <label className="flex items-center gap-2 cursor-pointer p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg w-max hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                                        <input type="checkbox" className="w-5 h-5 accent-red-600" checked={formData.isUrgent} onChange={e => setFormData({...formData, isUrgent: e.target.checked})} />
+                                        <span className="text-red-700 dark:text-red-400 font-bold flex items-center gap-1"><Zap size={18} className="animate-pulse"/> งานด่วนพิเศษ</span>
+                                    </label>
+                                </div>
                             </div>
                             <div className="mt-4">
                                 <label className="text-sm font-medium text-slate-600 dark:text-slate-300">หมายเหตุ (ระบุเพิ่มเติม)</label>
@@ -649,7 +661,12 @@
                             const remainingPallets = Math.max(0, Number(req.pallets || 0) - deliveredPallets);
 
                             return(
-                            <Card key={req.id}>
+                            <Card key={req.id} className={`relative ${req.isUrgent ? 'border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.15)] ring-2 ring-red-100 dark:ring-red-900/30' : ''}`}>
+                                {req.isUrgent && (
+                                    <div className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 border-2 border-white dark:border-slate-800 animate-bounce">
+                                        <Zap size={14} className="fill-white" /> ด่วน!
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <div className="w-full">
                                         <StatusBadge status={req.status}/>
@@ -659,7 +676,6 @@
                                         <div className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                                             <Calendar size={14}/> {req.date} {formatTimeHelper(req.createdAt, req.id)} น. • สำเร็จ {req.tripsCompleted}/{req.tripsNeeded} เที่ยว
                                         </div>
-                                        {/* 💡 แสดงปริมาณพาเลทคงเหลือที่ถูกคำนวณหักลบแล้ว */}
                                         {req.pallets > 0 && (
                                             <div className="text-sm text-blue-800 dark:text-blue-300 mt-2 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-md border border-blue-100 dark:border-blue-800 inline-block font-medium">
                                                 พาเลทคงเหลือ: <span className="font-bold">{remainingPallets}</span> / {req.pallets} พาเลท
@@ -698,8 +714,19 @@
             
             const [permStatus, setPermStatus] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'denied');
 
-            const availableRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => !t.driverId));
-            const myRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled');
+            const availableRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => !t.driverId))
+                .sort((a,b) => {
+                    if (a.isUrgent && !b.isUrgent) return -1;
+                    if (!a.isUrgent && b.isUrgent) return 1;
+                    return Number(b.id) - Number(a.id);
+                });
+            
+            const myRequests = (requests || []).filter(r => r && r.status !== 'completed' && r.trips && r.trips.some(t => String(t.driverId) === String(currentUser.id) && t.status !== 'finished') && r.status !== 'cancelled')
+                .sort((a,b) => {
+                    if (a.isUrgent && !b.isUrgent) return -1;
+                    if (!a.isUrgent && b.isUrgent) return 1;
+                    return Number(b.id) - Number(a.id);
+                });
 
             const handleScanSuccess = (pallets) => {
                 if (scanData.reqId && scanData.tripId) {
@@ -749,11 +776,17 @@
                             {availableRequests.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">ไม่มีงานว่างในขณะนี้</div>
                             ) : availableRequests.map(req => (
-                                <Card key={req.id} className="border-l-4 border-amber-400">
+                                <Card key={req.id} className={`relative ${req.isUrgent ? 'border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] bg-red-50/30 dark:bg-red-900/10' : 'border-l-4 border-amber-400'}`}>
+                                    {req.isUrgent && (
+                                        <div className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 border-2 border-white dark:border-slate-800 animate-bounce">
+                                            <Zap size={14} className="fill-white" /> ด่วน!
+                                        </div>
+                                    )}
                                     <div className="mb-4">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs text-slate-400 dark:text-slate-300 font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">#{req.id}</span>
                                             <span className="text-sm text-slate-500 dark:text-slate-400">{req.date} {formatTimeHelper(req.createdAt, req.id)} น.</span>
+                                            {req.isUrgent && <span className="text-xs text-red-600 dark:text-red-400 font-bold bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded">URGENT</span>}
                                         </div>
                                         <div className="font-bold text-lg text-slate-800 dark:text-slate-100">{req.pickup} → {req.dropoff}</div>
                                         <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">ผู้ขอ: {req.requesterName} {req.pallets > 0 && <span className="text-slate-500 dark:text-slate-400 font-medium mx-1">• {req.pallets} พาเลท</span>}</div>
@@ -762,7 +795,7 @@
                                     <div className="space-y-2">{(req.trips||[]).map((trip, i) => !trip.driverId && (
                                         <div key={trip.id} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-2 rounded text-sm border border-slate-100 dark:border-slate-700">
                                             <span className="text-slate-700 dark:text-slate-300">เที่ยวที่ {i+1}</span>
-                                            <button type="button" onClick={() => onAcceptTrip(req.id, trip.id)} className="bg-slate-800 dark:bg-slate-700 text-white px-3 py-1.5 rounded font-medium hover:bg-slate-700 dark:hover:bg-slate-600">รับงานนี้</button>
+                                            <button type="button" onClick={() => onAcceptTrip(req.id, trip.id)} className={`px-3 py-1.5 rounded font-medium text-white ${req.isUrgent ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600'}`}>รับงานนี้</button>
                                         </div>
                                     ))}</div>
                                 </Card>
@@ -779,9 +812,18 @@
                                 const displayAcceptedTime = myTrip?.acceptedTime || localStorage.getItem(`accepted_time_${myTrip?.id}`);
 
                                 return (
-                                    <Card key={req.id} className="border-blue-200 dark:border-blue-800">
+                                    <Card key={req.id} className={`relative ${req.isUrgent ? 'border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.2)] bg-red-50/30 dark:bg-red-900/10' : 'border-blue-200 dark:border-blue-800'}`}>
+                                        {req.isUrgent && (
+                                            <div className="absolute -top-3 -right-3 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 border-2 border-white dark:border-slate-800 animate-bounce">
+                                                <Zap size={14} className="fill-white" /> ด่วน!
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-start">
                                             <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 rounded font-mono">#{req.id}</span>
+                                                    {req.isUrgent && <span className="text-xs text-red-600 dark:text-red-400 font-bold bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded flex items-center gap-1"><Zap size={12}/> ด่วน</span>}
+                                                </div>
                                                 <div className="font-bold text-lg text-slate-800 dark:text-slate-100">{req.pickup} → {req.dropoff}</div>
                                                 <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                                                     วันที่: {req.date}
@@ -910,7 +952,7 @@
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editId, setEditId] = useState(null);
             const [isProcessing, setIsProcessing] = useState(false);
-            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '' });
+            const [formData, setFormData] = useState({ pickup: '', dropoff: '', date: '', tripsNeeded: 1, pallets: '', note: '', isUrgent: false });
 
             const [searchTerm, setSearchTerm] = useState('');
             const [statusFilter, setStatusFilter] = useState('all');
@@ -929,7 +971,7 @@
             }, [locations, editId]);
 
             const resetForm = () => {
-                setFormData({ pickup: locations && locations.length > 0 ? locations[0]?.name||'' : '', dropoff: locations && locations.length > 1 ? locations[1]?.name||'' : (locations && locations.length > 0 ? locations[0]?.name||'' : ''), date: '', tripsNeeded: 1, pallets: '', note: '' });
+                setFormData({ pickup: locations && locations.length > 0 ? locations[0]?.name||'' : '', dropoff: locations && locations.length > 1 ? locations[1]?.name||'' : (locations && locations.length > 0 ? locations[0]?.name||'' : ''), date: '', tripsNeeded: 1, pallets: '', note: '', isUrgent: false });
                 setIsFormOpen(false);
                 setEditId(null);
             };
@@ -938,7 +980,11 @@
                 e.preventDefault();
                 if (editId) {
                     setIsProcessing(true);
-                    const updateData = { id: editId, ...formData };
+                    
+                    // 💡 ห่อแท็ก [URGENT] กลับเข้าไปใน note ก่อนส่งให้ Backend
+                    const finalNote = formData.isUrgent ? `[URGENT] ${formData.note || ''}` : (formData.note || '');
+                    const updateData = { ...formData, id: editId, note: finalNote };
+                    
                     callAPI('editRequest', { reqData: updateData })
                         .then(res => {
                             if (res && res.success) {
@@ -957,7 +1003,7 @@
             };
 
             const handleEdit = (req) => {
-                setFormData({ pickup: req.pickup, dropoff: req.dropoff, date: req.date, tripsNeeded: req.tripsNeeded, pallets: req.pallets || '', note: req.note || '' });
+                setFormData({ pickup: req.pickup, dropoff: req.dropoff, date: req.date, tripsNeeded: req.tripsNeeded, pallets: req.pallets || '', note: req.note || '', isUrgent: req.isUrgent || false });
                 setEditId(req.id);
                 setIsFormOpen(false);
             };
@@ -1022,7 +1068,11 @@
                     }
                     
                     return mStatus && mSearch && mDate;
-                }).sort((a,b) => Number(b.id) - Number(a.id));
+                }).sort((a,b) => {
+                    if (a.isUrgent && !b.isUrgent) return -1;
+                    if (!a.isUrgent && b.isUrgent) return 1;
+                    return Number(b.id) - Number(a.id);
+                });
             }, [requests, searchTerm, statusFilter, filterType, selectedDate, selectedMonth, startDate, endDate]);
 
             const renderForm = (title) => (
@@ -1043,6 +1093,13 @@
                                     <label className="text-sm font-medium text-slate-700 dark:text-slate-300">จำนวนพาเลท</label>
                                     <input required type="number" min="0" className="w-full p-2 border rounded outline-none bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600" value={formData.pallets} onChange={e=>setFormData({...formData, pallets: parseInt(e.target.value) || ''})} placeholder="ระบุจำนวน" />
                                 </div>
+                            </div>
+
+                            <div className="col-span-1 md:col-span-2 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg w-max hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+                                    <input type="checkbox" className="w-5 h-5 accent-red-600" checked={formData.isUrgent} onChange={e => setFormData({...formData, isUrgent: e.target.checked})} />
+                                    <span className="text-red-700 dark:text-red-400 font-bold flex items-center gap-1"><Zap size={18} className="animate-pulse"/> ตั้งเป็นงานด่วนพิเศษ</span>
+                                </label>
                             </div>
                         </div>
                         <div>
@@ -1131,11 +1188,16 @@
                     <div className="grid gap-4">
                         {filteredLocalRequests.length === 0 ? <p className="text-center text-slate-400 dark:text-slate-500 py-8 bg-white dark:bg-slate-800 rounded-xl border border-dashed dark:border-slate-700">ไม่พบรายการคำขอ</p> : null}
                         {filteredLocalRequests.map(req => (
-                            <Card key={req.id} className={editId === req.id ? "ring-2 ring-blue-400 border-transparent shadow-lg bg-blue-50/10" : ""}>
+                            <Card key={req.id} className={editId === req.id ? "ring-2 ring-blue-400 border-transparent shadow-lg bg-blue-50/10" : req.isUrgent ? "border-red-500 shadow-[0_0_15px_rgba(220,38,38,0.15)] bg-red-50/10 dark:bg-red-900/10" : ""}>
                                 {editId === req.id ? (
                                     renderForm(`✏️ แก้ไขใบงาน #${req.id}`)
                                 ) : (
-                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative">
+                                        {req.isUrgent && (
+                                            <div className="absolute -top-6 -right-2 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1 border border-white dark:border-slate-800 animate-pulse">
+                                                <Zap size={12} className="fill-white" /> ด่วน
+                                            </div>
+                                        )}
                                         <div className="flex-1">
                                             <div className="flex gap-2 items-center"><span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 rounded font-mono">#{req.id}</span> <StatusBadge status={req.status}/></div>
                                             <div className="font-bold mt-2 text-slate-800 dark:text-slate-100 flex items-center gap-1 text-lg"><MapPin size={18} className="text-blue-500"/> {req.pickup} <span className="text-slate-300 dark:text-slate-600 mx-1">→</span> <MapPin size={18} className="text-green-500"/> {req.dropoff}</div>
@@ -1185,7 +1247,6 @@
             const [endDate, setEndDate] = useState('');     
             const [selectedDriver, setSelectedDriver] = useState('all');
 
-            // 💡 ฟังก์ชันเช็คว่าวันที่ตรงกับที่ Filter หรือไม่
             const isDateMatch = (dateStr) => {
                 if (!dateStr) return false;
                 if (filterType === 'daily') return dateStr === selectedDate;
@@ -1276,7 +1337,6 @@
 
             const driverUsers = (users || []).filter(u => u && u.role === 'driver').map(u => u.name);
 
-            // 💡 อัปเดตสถิติรวมด้านบนให้นับจาก "เที่ยวรถ (Trips)"
             let totalTripsCount = 0, completedTripsCount = 0, pendingTripsCount = 0, activeTripsCount = 0;
 
             (requests || []).forEach(req => {
@@ -1358,7 +1418,6 @@
 
             const maxChart1Scale = Math.max(...chart1Data.data.map(d => d.total), 1) * 1.15;
 
-            // 💡 กราฟผู้ใช้งาน: อัปเดตให้บวกยอด "requested" เฉพาะเที่ยวที่ตรง Filter ทำให้เลขเท่ากับ Total เป๊ะ
             const userPerformanceData = useMemo(() => {
                 const stats = {};
                 (users || []).forEach(u => {
@@ -1375,7 +1434,6 @@
                         if (!isDateMatch(tDate)) return;
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
 
-                        // 💡 นับยอดเรียกรถจากจำนวนเที่ยว (Trips) ที่ผ่านเงื่อนไข Filter เพื่อให้ตรงกับกล่อง Total ด้านบนเป๊ะๆ
                         if (stats[req.requesterId]) {
                             stats[req.requesterId].requested += 1;
                         }
@@ -1419,7 +1477,6 @@
                         if (!isDateMatch(tDate)) return;
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
 
-                        // 💡 บวกรวมยอดพาเลทที่ร้องขอ (บวกแค่ครั้งเดียวต่อ 1 คำขอ ที่มีเที่ยววิ่งผ่านเงื่อนไข Filter)
                         if (stats[req.requesterId] && !addedReqPallets.has(req.id)) {
                             stats[req.requesterId].reqPallets += Number(req.pallets || 0);
                             addedReqPallets.add(req.id);
@@ -1505,12 +1562,16 @@
                         if (selectedDriver !== 'all' && String(trip.driverId) !== String(selectedDriver)) return;
 
                         if (trip.status === 'waiting') {
-                            if (!locMap[req.pickup]) locMap[req.pickup] = { value: 0 };
+                            if (!locMap[req.pickup]) locMap[req.pickup] = { value: 0, requesters: {} };
                             locMap[req.pickup].value += 1;
+                            
+                            const rName = req.requesterName || 'ไม่ระบุ';
+                            if (!locMap[req.pickup].requesters[rName]) locMap[req.pickup].requesters[rName] = 0;
+                            locMap[req.pickup].requesters[rName] += 1;
                         }
                     });
                 });
-                return Object.keys(locMap).map(name => ({ name, value: locMap[name].value })).sort((a,b) => b.value - a.value);
+                return Object.keys(locMap).map(name => ({ name, value: locMap[name].value, requesters: locMap[name].requesters })).sort((a,b) => b.value - a.value);
             }, [requests, filterType, selectedDate, selectedMonth, startDate, endDate, selectedDriver]);
 
             const maxWaitingBarScale = Math.max(...waitingBarData.map(d => d.value), 1) * 1.15;
@@ -1751,14 +1812,28 @@
                 waitingVolume: (
                     <Card className="border-amber-100 dark:border-slate-700 flex flex-col h-full">
                         <WidgetHeader id="waitingVolume" title="ปริมาณงานค้างรอรับ แยกตามจุดรับ" icon={Activity} colorClass="text-amber-500" />
-                        <div className="flex items-end justify-around gap-4 overflow-x-auto pb-4 px-2 pt-8 mt-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('waitingVolume', 256)}>
+                        <div className="flex items-end justify-around gap-4 overflow-x-auto pb-4 px-2 pt-16 mt-2 scrollbar-thin scrollbar-thumb-slate-200" style={getContainerStyle('waitingVolume', 256)}>
                             {waitingBarData.map((item, index) => {
                                 const hPct = Math.min(100, (item.value / maxWaitingBarScale) * 100);
                                 const color = getEntityColor(getNormalizedColorName(item.name));
+                                
+                                let tooltipLines = [];
+                                tooltipLines.push(`📍 จุดรับ: ${item.name}`);
+                                tooltipLines.push(`รอรับทั้งหมด: ${item.value} เที่ยว`);
+                                if (item.requesters) {
+                                    Object.entries(item.requesters).forEach(([reqName, count]) => {
+                                        tooltipLines.push(`  • ขอโดย ${reqName}: ${count} เที่ยว`);
+                                    });
+                                }
+
                                 return (
-                                    <div key={index} className="flex flex-col items-center gap-2 h-full flex-1 min-w-[40px]">
+                                    <div key={index} className="flex flex-col items-center gap-2 h-full flex-1 min-w-[40px] relative group z-10 hover:z-50">
+                                        <div className="absolute bottom-[calc(100%+10px)] left-1/2 transform -translate-x-1/2 mb-2 bg-slate-800 dark:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-pre z-[100] pointer-events-none shadow-xl border border-slate-600 text-left w-max">
+                                            {tooltipLines.join('\n')}
+                                        </div>
+                                        
                                         <div className="w-full flex-1 flex items-end justify-center h-full">
-                                            <div className="w-8 sm:w-10 relative flex flex-col justify-end items-center h-full group" title={`${item.name}: ${item.value} เที่ยว`}>
+                                            <div className="w-8 sm:w-10 relative flex flex-col justify-end items-center h-full">
                                                 <div className="w-full rounded-t-sm shadow-sm transition-all flex justify-center items-start pt-1.5" style={{ height: `${hPct}%`, backgroundColor: color, minHeight: item.value > 0 ? '24px' : '0' }}>
                                                     <span className="text-white font-bold text-xs drop-shadow-md">{item.value}</span>
                                                 </div>
@@ -1922,10 +1997,9 @@
                             </div>
                         </div>
                     )}
-                    {/* 💡 แก้ไข Error ตรงนี้: เปลี่ยนชื่อตัวแปรให้ตรงกับ Props ที่รับมา */}
-                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={onRefresh} />)}
-                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={onRefresh} />)}
-                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={onCreateRequest} onRefresh={onRefresh} />)}
+                    {activeTab === 'users' && (<AdminUserManagement users={users} setUsers={setUsers} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'locations' && (<AdminLocationManagement locations={locations} setLocations={setLocations} onRefresh={() => fetchData(false)} />)}
+                    {activeTab === 'requests' && (<AdminRequestManagement requests={requests} setRequests={setRequests} locations={locations} onCreateRequest={handleCreateRequest} onRefresh={() => fetchData(false)} />)}
                 </div>
             );
         }
@@ -1994,7 +2068,17 @@
                         if (data && !isUpdating.current) { 
                             if(data.users) setUsers(data.users);
                             if(data.requests) {
-                                const sortedReqs = data.requests.sort((a, b) => Number(b.id) - Number(a.id));
+                                // 💡 แปลงค่า [URGENT] จากช่อง note กลับมาเป็นสถานะ isUrgent ให้ Frontend
+                                const processedReqs = data.requests.map(r => {
+                                    let isUrgent = false;
+                                    let cleanNote = r.note || '';
+                                    if (typeof cleanNote === 'string' && cleanNote.includes('[URGENT]')) {
+                                        isUrgent = true;
+                                        cleanNote = cleanNote.replace('[URGENT]', '').trim();
+                                    }
+                                    return { ...r, isUrgent, note: cleanNote };
+                                });
+                                const sortedReqs = processedReqs.sort((a, b) => Number(b.id) - Number(a.id));
                                 setRequests(sortedReqs);
                             }
                             if(data.locations) setLocations(data.locations);
@@ -2093,11 +2177,17 @@
                 const initialTrips = Array.from({ length: data.tripsNeeded }, (_, i) => ({ 
                     id: `${newReqId}-${i}`, status: 'waiting', startTime: null, endTime: null, driverId: null, driverName: null
                 }));
+
+                // 💡 ฝังแท็ก [URGENT] เข้าไปใน note แทนการเพิ่มคอลัมน์ใหม่
+                const finalNote = data.isUrgent ? `[URGENT] ${data.note || ''}` : (data.note || '');
+
                 const newReq = { 
                     id: newReqId, requesterId: currentUser.id, requesterName: currentUser.name, 
                     ...data, 
                     pallets: data.pallets || 0,
-                    status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips 
+                    note: finalNote, 
+                    status: 'pending', tripsCompleted: 0, createdAt: new Date().toISOString(), trips: initialTrips,
+                    isUrgent: data.isUrgent 
                 };
                 
                 const updatedRequests = [newReq, ...requests].sort((a, b) => Number(b.id) - Number(a.id));
