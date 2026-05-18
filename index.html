@@ -147,6 +147,8 @@
         const Maximize = (p) => <SvgIcon {...p}><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></SvgIcon>;
         const MoveVertical = (p) => <SvgIcon {...p}><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="22"/></SvgIcon>;
         const Zap = (p) => <SvgIcon {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></SvgIcon>;
+        // 💡 เพิ่มไอคอนลูกศรชี้ขวา (ArrowRight)
+        const ArrowRight = (p) => <SvgIcon {...p}><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></SvgIcon>;
 
         // 💡 ชุดสีสันสำหรับกราฟ (Color Palette) 30 สีไม่ซ้ำกัน
         const EXTENDED_PALETTE = [
@@ -1920,7 +1922,8 @@
                                     </div>
                                     <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap sm:justify-end">
                                         <span className="px-2 py-1 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow-sm" style={{borderColor: getEntityColor(getNormalizedColorName(t.reqPickup)), color: getEntityColor(getNormalizedColorName(t.reqPickup))}}>{t.reqPickup}</span>
-                                        <Navigation size={14} className="text-slate-400" />
+                                        {/* 💡 เปลี่ยนจากไอคอน Navigation เป็นลูกศร ArrowRight */}
+                                        <ArrowRight size={14} className="text-slate-400" />
                                         <span className="px-2 py-1 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded shadow-sm" style={{borderColor: getEntityColor(getNormalizedColorName(t.reqDropoff)), color: getEntityColor(getNormalizedColorName(t.reqDropoff))}}>{t.reqDropoff}</span>
                                     </div>
                                 </div>
